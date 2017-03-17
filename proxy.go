@@ -51,11 +51,21 @@ func (c *Coordinator) getResponseChannel(id string) chan *http.Response {
 	return ch
 }
 
-func (c *Coordinator) DoScrape(r *http.Request) (*http.Response, error) {
+func (c *Coordinator) DoScrape(ctx context.Context, r *http.Request) (*http.Response, error) {
 	log.Printf("DoScrape %q", r.URL.String())
 	r.Header.Add("Id", r.URL.String())
-	c.getRequestChannel(r.URL.Hostname()) <- r
-	return <-c.getResponseChannel(r.URL.String()), nil
+	select {
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	case c.getRequestChannel(r.URL.Hostname()) <- r:
+	}
+
+	select {
+	case <-ctx.Done():
+		return nil, ctx.Err() // TODO: We should cancel this request.
+	case resp := <-c.getResponseChannel(r.URL.String()):
+		return resp, nil
+	}
 }
 
 func (c *Coordinator) WaitForScrapeInstruction(fqdn string) (*http.Request, error) {
@@ -86,11 +96,10 @@ func main() {
 		// Proxy request
 		if r.URL.Host != "" {
 			ctx, _ := context.WithTimeout(r.Context(), time.Second*10)
-			//client := &http.Client{}
 			request := r.WithContext(ctx)
 			request.RequestURI = ""
 
-			resp, err := coordinator.DoScrape(request)
+			resp, err := coordinator.DoScrape(ctx, request)
 			if err != nil {
 				log.Println(err)
 				http.Error(w, fmt.Sprintf("Error scraping %q: %s", request.URL.String(), err.Error()), 500)
