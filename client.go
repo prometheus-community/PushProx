@@ -3,12 +3,20 @@ package main
 import (
 	"bufio"
 	"bytes"
+	"flag"
 	"fmt"
 	"io/ioutil"
 	"log"
 	"net/http"
 	"strings"
 	"time"
+
+	"github.com/ShowMax/go-fqdn"
+)
+
+var (
+	myFqdn   = flag.String("fqdn", fqdn.Get(), "FQDN to register with")
+	proxyUrl = flag.String("proxy-url", "http://pushprox.robustperception.io:8080", "Push proxy to talk to.")
 )
 
 func doScrape(request *http.Request) {
@@ -21,7 +29,7 @@ func doScrape(request *http.Request) {
 		resp := &http.Response{
 			StatusCode: 500,
 			Header:     http.Header{},
-			Body:       ioutil.NopCloser(bytes.NewBufferString(msg)),
+			Body:       ioutil.NopCloser(strings.NewReader(msg)),
 		}
 		err = doPush(resp, request)
 		if err != nil {
@@ -41,13 +49,14 @@ func doScrape(request *http.Request) {
 	log.Printf("Pushed scrape result for %s", request.URL.String())
 }
 
+// Report the result of the scrape back up to the proxy.
 func doPush(resp *http.Response, request *http.Request) error {
 	resp.Header.Set("id", request.Header.Get("id")) // Link the request and response
 
 	buf := &bytes.Buffer{}
 	resp.Write(buf)
 	client := &http.Client{}
-	_, err := client.Post("http://localhost:1234/push", "", buf)
+	_, err := client.Post(*proxyUrl+"/push", "", buf)
 	if err != nil {
 		return err
 	}
@@ -56,9 +65,7 @@ func doPush(resp *http.Response, request *http.Request) error {
 
 func loop() {
 	client := &http.Client{}
-	fqdn := "localhost"
-
-	resp, err := client.Post("http://localhost:1234/poll", "", strings.NewReader(fqdn))
+	resp, err := client.Post(*proxyUrl+"/poll", "", strings.NewReader(*myFqdn))
 	if err != nil {
 		log.Printf("Error polling: %s", err)
 		time.Sleep(time.Second) // Don't pound the server.
@@ -73,6 +80,8 @@ func loop() {
 }
 
 func main() {
+	flag.Parse()
+	log.Printf("Using FQDN of %s", *myFqdn)
 	for {
 		loop()
 	}

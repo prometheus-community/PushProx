@@ -56,7 +56,7 @@ func (c *Coordinator) DoScrape(ctx context.Context, r *http.Request) (*http.Resp
 	r.Header.Add("Id", r.URL.String())
 	select {
 	case <-ctx.Done():
-		return nil, ctx.Err()
+		return nil, fmt.Errorf("Matching client not found for %q: %s", r.URL.String(), ctx.Err())
 	case c.getRequestChannel(r.URL.Hostname()) <- r:
 	}
 
@@ -70,12 +70,13 @@ func (c *Coordinator) DoScrape(ctx context.Context, r *http.Request) (*http.Resp
 
 func (c *Coordinator) WaitForScrapeInstruction(fqdn string) (*http.Request, error) {
 	log.Printf("WaitForScrapeInstruction %q", fqdn)
+	// TODO: What if the client times out?
 	ch := c.getRequestChannel(fqdn)
 	for {
 		request := <-ch
-		// Check if the context has already expired.
 		select {
 		case <-request.Context().Done():
+			// Request has timed out, get another one.
 		default:
 			return request, nil
 		}
@@ -122,15 +123,15 @@ func main() {
 			fqdn, _ := ioutil.ReadAll(r.Body)
 			request, _ := coordinator.WaitForScrapeInstruction(strings.TrimSpace(string(fqdn)))
 			request.WriteProxy(w) // Send full request as the body of the response.
-			log.Println("Responded to /poll")
+			log.Printf("Responded to /poll with %q", request.URL.String())
 			return
 		}
 
 		if r.URL.Path == "/push" {
-			log.Println("Got /push")
 			buf := &bytes.Buffer{}
 			io.Copy(buf, r.Body)
 			scrapeResult, _ := http.ReadResponse(bufio.NewReader(buf), nil)
+			log.Printf("Got /push for %q", scrapeResult.Header.Get("Id"))
 			coordinator.ScrapeResult(scrapeResult)
 			return
 		}
@@ -138,5 +139,5 @@ func main() {
 		http.Error(w, "404: Unknown path", 404)
 	})
 
-	log.Fatal(http.ListenAndServe(":1234", nil))
+	log.Fatal(http.ListenAndServe(":8080", nil))
 }
