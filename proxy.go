@@ -62,7 +62,7 @@ func (c *Coordinator) DoScrape(ctx context.Context, r *http.Request) (*http.Resp
 
 	select {
 	case <-ctx.Done():
-		return nil, ctx.Err() // TODO: We should cancel this request.
+		return nil, ctx.Err()
 	case resp := <-c.getResponseChannel(r.URL.String()):
 		return resp, nil
 	}
@@ -71,7 +71,15 @@ func (c *Coordinator) DoScrape(ctx context.Context, r *http.Request) (*http.Resp
 func (c *Coordinator) WaitForScrapeInstruction(fqdn string) (*http.Request, error) {
 	log.Printf("WaitForScrapeInstruction %q", fqdn)
 	ch := c.getRequestChannel(fqdn)
-	return <-ch, nil
+	for {
+		request := <-ch
+		// Check if the context has already expired.
+		select {
+		case <-request.Context().Done():
+		default:
+			return request, nil
+		}
+	}
 }
 
 func (c *Coordinator) ScrapeResult(r *http.Response) {
