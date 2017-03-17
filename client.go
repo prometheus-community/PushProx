@@ -3,6 +3,8 @@ package main
 import (
 	"bufio"
 	"bytes"
+	"fmt"
+	"io/ioutil"
 	"log"
 	"net/http"
 	"strings"
@@ -11,25 +13,45 @@ import (
 
 func doScrape(request *http.Request) {
 	client := &http.Client{}
-	id := request.Header.Get("id") // Needed so they can be linked.
 
 	scrapeResp, err := client.Do(request)
 	if err != nil {
-		log.Printf("Failed to scrape %s: %s", request.URL.String(), err)
+		msg := fmt.Sprintf("Failed to scrape %s: %s", request.URL.String(), err)
+		log.Print(msg)
+		resp := &http.Response{
+			StatusCode: 500,
+			Header:     http.Header{},
+			Body:       ioutil.NopCloser(bytes.NewBufferString(msg)),
+		}
+		err = doPush(resp, request)
+		if err != nil {
+			log.Printf("Failed to push failed scrape result for %s: %s", request.URL.String(), err)
+			return
+		}
+		log.Printf("Pushed failed scrape result for %s", request.URL.String())
 		return
 	}
 	log.Printf("Scraped %s", request.URL.String())
-	scrapeResp.Header.Set("id", id)
-	buf := &bytes.Buffer{}
-	scrapeResp.Write(buf)
-	log.Println(buf.Len())
 
-	_, err = client.Post("http://localhost:1234/push", "", buf)
+	err = doPush(scrapeResp, request)
 	if err != nil {
 		log.Printf("Failed to push scrape result for %s: %s", request.URL.String(), err)
 		return
 	}
 	log.Printf("Pushed scrape result for %s", request.URL.String())
+}
+
+func doPush(resp *http.Response, request *http.Request) error {
+	resp.Header.Set("id", request.Header.Get("id")) // Link the request and response
+
+	buf := &bytes.Buffer{}
+	resp.Write(buf)
+	client := &http.Client{}
+	_, err := client.Post("http://localhost:1234/push", "", buf)
+	if err != nil {
+		return err
+	}
+	return nil
 }
 
 func loop() {
