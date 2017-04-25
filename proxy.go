@@ -51,6 +51,7 @@ func (c *Coordinator) getResponseChannel(id string) chan *http.Response {
 	return ch
 }
 
+// Request a scrape.
 func (c *Coordinator) DoScrape(ctx context.Context, r *http.Request) (*http.Response, error) {
 	log.Printf("DoScrape %q", r.URL.String())
 	r.Header.Add("Id", r.URL.String())
@@ -68,6 +69,7 @@ func (c *Coordinator) DoScrape(ctx context.Context, r *http.Request) (*http.Resp
 	}
 }
 
+// Client registering to accept a scrape request. Blocking.
 func (c *Coordinator) WaitForScrapeInstruction(fqdn string) (*http.Request, error) {
 	log.Printf("WaitForScrapeInstruction %q", fqdn)
 	// TODO: What if the client times out?
@@ -83,6 +85,7 @@ func (c *Coordinator) WaitForScrapeInstruction(fqdn string) (*http.Request, erro
 	}
 }
 
+// Client sending a scrape result in.
 func (c *Coordinator) ScrapeResult(r *http.Response) {
 	id := r.Header.Get("Id")
 	log.Printf("ScrapeResult %q", id)
@@ -119,6 +122,7 @@ func main() {
 			return
 		}
 
+		// Client registering and asking for scrapes.
 		if r.URL.Path == "/poll" {
 			fqdn, _ := ioutil.ReadAll(r.Body)
 			request, _ := coordinator.WaitForScrapeInstruction(strings.TrimSpace(string(fqdn)))
@@ -127,6 +131,7 @@ func main() {
 			return
 		}
 
+		// Scrape response from client.
 		if r.URL.Path == "/push" {
 			buf := &bytes.Buffer{}
 			io.Copy(buf, r.Body)
