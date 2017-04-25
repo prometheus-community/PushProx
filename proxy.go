@@ -14,8 +14,6 @@ import (
 	"time"
 )
 
-// TODO: Prevent any "localhost" or rfc1918 requests to our networks
-
 type Coordinator struct {
 	mu        sync.Mutex
 	waiting   map[string]chan *http.Request
