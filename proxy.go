@@ -74,7 +74,7 @@ func (c *Coordinator) removeResponseChannel(id string) {
 // Request a scrape.
 func (c *Coordinator) DoScrape(ctx context.Context, r *http.Request) (*http.Response, error) {
 	id := genId()
-	log.Infof("DoScrape %q id %s", r.URL.String(), id)
+	log.With("scrape_id", id).With("url", r.URL.String()).Info("DoScrape")
 	r.Header.Add("Id", id)
 	select {
 	case <-ctx.Done():
@@ -95,7 +95,7 @@ func (c *Coordinator) DoScrape(ctx context.Context, r *http.Request) (*http.Resp
 
 // Client registering to accept a scrape request. Blocking.
 func (c *Coordinator) WaitForScrapeInstruction(fqdn string) (*http.Request, error) {
-	log.Infof("WaitForScrapeInstruction %q", fqdn)
+	log.With("fqdn", fqdn).Info("WaitForScrapeInstruction")
 	// TODO: What if the client times out?
 	ch := c.getRequestChannel(fqdn)
 	for {
@@ -112,7 +112,7 @@ func (c *Coordinator) WaitForScrapeInstruction(fqdn string) (*http.Request, erro
 // Client sending a scrape result in.
 func (c *Coordinator) ScrapeResult(r *http.Response) {
 	id := r.Header.Get("Id")
-	log.Infof("ScrapeResult %q", id)
+	log.With("scrape_id", id).Info("ScrapeResult")
 	r.Header.Del("Id")
 	c.getResponseChannel(id) <- r
 	c.removeResponseChannel(id)
@@ -138,7 +138,7 @@ func main() {
 
 			resp, err := coordinator.DoScrape(ctx, request)
 			if err != nil {
-				log.Infof("Error scraping %q: %s", request.URL.String(), err)
+				log.With("url", request.URL.String()).Infof("Error scraping: %s", err)
 				http.Error(w, fmt.Sprintf("Error scraping %q: %s", request.URL.String(), err.Error()), 500)
 				return
 			}
@@ -152,7 +152,7 @@ func main() {
 			fqdn, _ := ioutil.ReadAll(r.Body)
 			request, _ := coordinator.WaitForScrapeInstruction(strings.TrimSpace(string(fqdn)))
 			request.WriteProxy(w) // Send full request as the body of the response.
-			log.Infof("Responded to /poll with %q for %s", request.URL.String(), request.Header.Get("Id"))
+			log.With("url", request.URL.String()).With("scrape_id", request.Header.Get("Id")).Info("Responded to /poll")
 			return
 		}
 
@@ -161,7 +161,7 @@ func main() {
 			buf := &bytes.Buffer{}
 			io.Copy(buf, r.Body)
 			scrapeResult, _ := http.ReadResponse(bufio.NewReader(buf), nil)
-			log.Infof("Got /push for %q", scrapeResult.Header.Get("Id"))
+			log.With("scrape_id", scrapeResult.Header.Get("Id")).Info("Got /push")
 			coordinator.ScrapeResult(scrapeResult)
 			return
 		}

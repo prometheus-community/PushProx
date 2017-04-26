@@ -23,13 +23,14 @@ var (
 )
 
 func doScrape(request *http.Request, client *http.Client) {
+	logger := log.With("scrape_id", request.Header.Get("id"))
 	ctx, _ := context.WithTimeout(request.Context(), util.GetScrapeTimeout(request))
 	request = request.WithContext(ctx)
 
 	scrapeResp, err := client.Do(request)
 	if err != nil {
 		msg := fmt.Sprintf("Failed to scrape %s: %s", request.URL.String(), err)
-		log.Info(msg)
+		log.Warn(msg)
 		resp := &http.Response{
 			StatusCode: 500,
 			Header:     http.Header{},
@@ -37,20 +38,20 @@ func doScrape(request *http.Request, client *http.Client) {
 		}
 		err = doPush(resp, request, client)
 		if err != nil {
-			log.Infof("Failed to push failed scrape result for %s: %s", request.Header.Get("id"), err)
+			log.Warnf("Failed to push failed scrape result: %s", err)
 			return
 		}
-		log.Infof("Pushed failed scrape result for %s", request.Header.Get("id"))
+		log.Info("Pushed failed scrape result")
 		return
 	}
-	log.Infof("Scraped for %s", request.Header.Get("id"))
+	logger.Info("Got scrape response")
 
 	err = doPush(scrapeResp, request, client)
 	if err != nil {
-		log.Infof("Failed to push scrape result for %s: %s", request.Header.Get("id"), err)
+		logger.Warn("Failed to push scrape result: %s", err)
 		return
 	}
-	log.Infof("Pushed scrape result for %s", request.Header.Get("id"))
+	logger.Info("Pushed scrape result")
 }
 
 // Report the result of the scrape back up to the proxy.
@@ -59,6 +60,7 @@ func doPush(resp *http.Response, request *http.Request, client *http.Client) err
 
 	buf := &bytes.Buffer{}
 	resp.Write(buf)
+	// TODO: Timeout
 	_, err := client.Post(*proxyUrl+"/push", "", buf)
 	if err != nil {
 		return err
@@ -76,7 +78,7 @@ func loop() {
 	}
 	defer resp.Body.Close()
 	request, _ := http.ReadRequest(bufio.NewReader(resp.Body))
-	log.Infof("Got request for %q for %s", request.URL.String(), request.Header.Get("id"))
+	log.With("scrape_id", request.Header.Get("id")).With("url", request.URL).Info("Got scrape request")
 	request.RequestURI = ""
 
 	go doScrape(request, client)
