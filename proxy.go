@@ -7,13 +7,16 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
-	"log"
 	"net/http"
 	"os"
 	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
+
+	"github.com/prometheus/common/log"
+
+	"gitlab.com/robust-perception/tug_of_war/util"
 )
 
 type Coordinator struct {
@@ -71,7 +74,7 @@ func (c *Coordinator) removeResponseChannel(id string) {
 // Request a scrape.
 func (c *Coordinator) DoScrape(ctx context.Context, r *http.Request) (*http.Response, error) {
 	id := genId()
-	log.Printf("DoScrape %q id %s", r.URL.String(), id)
+	log.Infof("DoScrape %q id %s", r.URL.String(), id)
 	r.Header.Add("Id", id)
 	select {
 	case <-ctx.Done():
@@ -92,7 +95,7 @@ func (c *Coordinator) DoScrape(ctx context.Context, r *http.Request) (*http.Resp
 
 // Client registering to accept a scrape request. Blocking.
 func (c *Coordinator) WaitForScrapeInstruction(fqdn string) (*http.Request, error) {
-	log.Printf("WaitForScrapeInstruction %q", fqdn)
+	log.Infof("WaitForScrapeInstruction %q", fqdn)
 	// TODO: What if the client times out?
 	ch := c.getRequestChannel(fqdn)
 	for {
@@ -109,10 +112,10 @@ func (c *Coordinator) WaitForScrapeInstruction(fqdn string) (*http.Request, erro
 // Client sending a scrape result in.
 func (c *Coordinator) ScrapeResult(r *http.Response) {
 	id := r.Header.Get("Id")
-	log.Printf("ScrapeResult %q", id)
+	log.Infof("ScrapeResult %q", id)
 	r.Header.Del("Id")
-	// TODO: If this id is fake, will cause memory leak.
 	c.getResponseChannel(id) <- r
+	c.removeResponseChannel(id)
 }
 
 func copyHttpResponse(resp *http.Response, w http.ResponseWriter) {
@@ -129,13 +132,13 @@ func main() {
 	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		// Proxy request
 		if r.URL.Host != "" {
-			ctx, _ := context.WithTimeout(r.Context(), time.Second*10)
+			ctx, _ := context.WithTimeout(r.Context(), util.GetScrapeTimeout(r))
 			request := r.WithContext(ctx)
 			request.RequestURI = ""
 
 			resp, err := coordinator.DoScrape(ctx, request)
 			if err != nil {
-				log.Println(err)
+				log.Infof("Error scraping %q: %s", request.URL.String(), err)
 				http.Error(w, fmt.Sprintf("Error scraping %q: %s", request.URL.String(), err.Error()), 500)
 				return
 			}
@@ -149,7 +152,7 @@ func main() {
 			fqdn, _ := ioutil.ReadAll(r.Body)
 			request, _ := coordinator.WaitForScrapeInstruction(strings.TrimSpace(string(fqdn)))
 			request.WriteProxy(w) // Send full request as the body of the response.
-			log.Printf("Responded to /poll with %q for %s", request.URL.String(), request.Header.Get("Id"))
+			log.Infof("Responded to /poll with %q for %s", request.URL.String(), request.Header.Get("Id"))
 			return
 		}
 
@@ -158,7 +161,7 @@ func main() {
 			buf := &bytes.Buffer{}
 			io.Copy(buf, r.Body)
 			scrapeResult, _ := http.ReadResponse(bufio.NewReader(buf), nil)
-			log.Printf("Got /push for %q", scrapeResult.Header.Get("Id"))
+			log.Infof("Got /push for %q", scrapeResult.Header.Get("Id"))
 			coordinator.ScrapeResult(scrapeResult)
 			return
 		}
