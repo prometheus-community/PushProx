@@ -9,8 +9,10 @@ import (
 	"io/ioutil"
 	"log"
 	"net/http"
+	"os"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 )
 
@@ -25,6 +27,16 @@ func NewCoordinator() *Coordinator {
 		waiting:   map[string]chan *http.Request{},
 		responses: map[string]chan *http.Response{},
 	}
+}
+
+var idCounter int64
+
+// Generate a unique ID
+func genId() string {
+	id := atomic.AddInt64(&idCounter, 1)
+	// TODO: Add MAC address.
+	// TODO: Sign these to prevent spoofing.
+	return fmt.Sprintf("%d-%d-%d", time.Now().Unix(), id, os.Getpid())
 }
 
 func (c *Coordinator) getRequestChannel(fqdn string) chan *http.Request {
@@ -49,20 +61,31 @@ func (c *Coordinator) getResponseChannel(id string) chan *http.Response {
 	return ch
 }
 
+// Remove a response channel. Idempotent.
+func (c *Coordinator) removeResponseChannel(id string) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	delete(c.responses, id)
+}
+
 // Request a scrape.
 func (c *Coordinator) DoScrape(ctx context.Context, r *http.Request) (*http.Response, error) {
-	log.Printf("DoScrape %q", r.URL.String())
-	r.Header.Add("Id", r.URL.String())
+	id := genId()
+	log.Printf("DoScrape %q id %s", r.URL.String(), id)
+	r.Header.Add("Id", id)
 	select {
 	case <-ctx.Done():
 		return nil, fmt.Errorf("Matching client not found for %q: %s", r.URL.String(), ctx.Err())
 	case c.getRequestChannel(r.URL.Hostname()) <- r:
 	}
 
+	respCh := c.getResponseChannel(id)
+	defer c.removeResponseChannel(id)
+
 	select {
 	case <-ctx.Done():
 		return nil, ctx.Err()
-	case resp := <-c.getResponseChannel(r.URL.String()):
+	case resp := <-respCh:
 		return resp, nil
 	}
 }
@@ -88,6 +111,7 @@ func (c *Coordinator) ScrapeResult(r *http.Response) {
 	id := r.Header.Get("Id")
 	log.Printf("ScrapeResult %q", id)
 	r.Header.Del("Id")
+	// TODO: If this id is fake, will cause memory leak.
 	c.getResponseChannel(id) <- r
 }
 
@@ -125,7 +149,7 @@ func main() {
 			fqdn, _ := ioutil.ReadAll(r.Body)
 			request, _ := coordinator.WaitForScrapeInstruction(strings.TrimSpace(string(fqdn)))
 			request.WriteProxy(w) // Send full request as the body of the response.
-			log.Printf("Responded to /poll with %q", request.URL.String())
+			log.Printf("Responded to /poll with %q for %s", request.URL.String(), request.Header.Get("Id"))
 			return
 		}
 

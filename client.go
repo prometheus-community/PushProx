@@ -24,7 +24,7 @@ func doScrape(request *http.Request) {
 
 	scrapeResp, err := client.Do(request)
 	if err != nil {
-		msg := fmt.Sprintf("Failed to scrape %s: %s", request.URL.String(), err)
+		msg := fmt.Sprintf("Failed to scrape %s: %s", request.Header.Get("id"), err)
 		log.Print(msg)
 		resp := &http.Response{
 			StatusCode: 500,
@@ -33,20 +33,20 @@ func doScrape(request *http.Request) {
 		}
 		err = doPush(resp, request)
 		if err != nil {
-			log.Printf("Failed to push failed scrape result for %s: %s", request.URL.String(), err)
+			log.Printf("Failed to push failed scrape result for %s: %s", request.Header.Get("id"), err)
 			return
 		}
-		log.Printf("Pushed failed scrape result for %s", request.URL.String())
+		log.Printf("Pushed failed scrape result for %s", request.Header.Get("id"))
 		return
 	}
-	log.Printf("Scraped %s", request.URL.String())
+	log.Printf("Scraped for %s", request.Header.Get("id"))
 
 	err = doPush(scrapeResp, request)
 	if err != nil {
-		log.Printf("Failed to push scrape result for %s: %s", request.URL.String(), err)
+		log.Printf("Failed to push scrape result for %s: %s", request.Header.Get("id"), err)
 		return
 	}
-	log.Printf("Pushed scrape result for %s", request.URL.String())
+	log.Printf("Pushed scrape result for %s", request.Header.Get("id"))
 }
 
 // Report the result of the scrape back up to the proxy.
@@ -73,7 +73,7 @@ func loop() {
 	}
 	defer resp.Body.Close()
 	request, _ := http.ReadRequest(bufio.NewReader(resp.Body))
-	log.Printf("Got request for %s", request.URL.String())
+	log.Printf("Got request for %q for %s", request.URL.String(), request.Header.Get("id"))
 	request.RequestURI = ""
 
 	go doScrape(request)
