@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"net/http"
+	"net/url"
 	"strings"
 	"time"
 
@@ -48,20 +49,31 @@ func doScrape(request *http.Request, client *http.Client) {
 
 	err = doPush(scrapeResp, request, client)
 	if err != nil {
-		logger.Warn("Failed to push scrape result: %s", err)
+		logger.Warnf("Failed to push scrape result: %s", err)
 		return
 	}
 	logger.Info("Pushed scrape result")
 }
 
 // Report the result of the scrape back up to the proxy.
-func doPush(resp *http.Response, request *http.Request, client *http.Client) error {
-	resp.Header.Set("id", request.Header.Get("id")) // Link the request and response
+func doPush(resp *http.Response, origRequest *http.Request, client *http.Client) error {
+	resp.Header.Set("id", origRequest.Header.Get("id")) // Link the request and response
+	// Remaining scrape deadline.
+	deadline, _ := origRequest.Context().Deadline()
+	resp.Header.Set("X-Prometheus-Scrape-Timeout", fmt.Sprintf("%f", float64(time.Until(deadline))/1e9))
+
+	u, _ := url.Parse(*proxyUrl + "/push")
 
 	buf := &bytes.Buffer{}
 	resp.Write(buf)
-	// TODO: Timeout
-	_, err := client.Post(*proxyUrl+"/push", "", buf)
+	request := &http.Request{
+		Method:        "POST",
+		URL:           u,
+		Body:          ioutil.NopCloser(buf),
+		ContentLength: int64(buf.Len()),
+	}
+	request = request.WithContext(origRequest.Context())
+	_, err := client.Do(request)
 	if err != nil {
 		return err
 	}
