@@ -110,12 +110,20 @@ func (c *Coordinator) WaitForScrapeInstruction(fqdn string) (*http.Request, erro
 }
 
 // Client sending a scrape result in.
-func (c *Coordinator) ScrapeResult(r *http.Response) {
+func (c *Coordinator) ScrapeResult(r *http.Response) error {
 	id := r.Header.Get("Id")
 	log.With("scrape_id", id).Info("ScrapeResult")
+	ctx, _ := context.WithTimeout(context.Background(), util.GetScrapeTimeout(r.Header))
+	// Don't expose internal headers.
 	r.Header.Del("Id")
-	c.getResponseChannel(id) <- r
-	c.removeResponseChannel(id)
+	r.Header.Del("X-Prometheus-Scrape-Timeout-Seconds")
+	select {
+	case c.getResponseChannel(id) <- r:
+		return nil
+	case <-ctx.Done():
+		c.removeResponseChannel(id)
+		return ctx.Err()
+	}
 }
 
 func copyHttpResponse(resp *http.Response, w http.ResponseWriter) {
@@ -132,7 +140,7 @@ func main() {
 	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		// Proxy request
 		if r.URL.Host != "" {
-			ctx, _ := context.WithTimeout(r.Context(), util.GetScrapeTimeout(r))
+			ctx, _ := context.WithTimeout(r.Context(), util.GetScrapeTimeout(r.Header))
 			request := r.WithContext(ctx)
 			request.RequestURI = ""
 
@@ -162,7 +170,11 @@ func main() {
 			io.Copy(buf, r.Body)
 			scrapeResult, _ := http.ReadResponse(bufio.NewReader(buf), nil)
 			log.With("scrape_id", scrapeResult.Header.Get("Id")).Info("Got /push")
-			coordinator.ScrapeResult(scrapeResult)
+			err := coordinator.ScrapeResult(scrapeResult)
+			if err != nil {
+				log.With("scrape_id", scrapeResult.Header.Get("Id")).Infof("Error pushing: %s", err)
+				http.Error(w, fmt.Sprintf("Error pushing: %s", err.Error()), 500)
+			}
 			return
 		}
 

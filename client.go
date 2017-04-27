@@ -25,7 +25,7 @@ var (
 
 func doScrape(request *http.Request, client *http.Client) {
 	logger := log.With("scrape_id", request.Header.Get("id"))
-	ctx, _ := context.WithTimeout(request.Context(), util.GetScrapeTimeout(request))
+	ctx, _ := context.WithTimeout(request.Context(), util.GetScrapeTimeout(request.Header))
 	request = request.WithContext(ctx)
 
 	scrapeResp, err := client.Do(request)
@@ -39,17 +39,17 @@ func doScrape(request *http.Request, client *http.Client) {
 		}
 		err = doPush(resp, request, client)
 		if err != nil {
-			log.Warnf("Failed to push failed scrape result: %s", err)
+			log.Warnf("Failed to push failed scrape response: %s", err)
 			return
 		}
-		log.Info("Pushed failed scrape result")
+		log.Info("Pushed failed scrape response")
 		return
 	}
-	logger.Info("Got scrape response")
+	logger.Info("Retrieved scrape response")
 
 	err = doPush(scrapeResp, request, client)
 	if err != nil {
-		logger.Warnf("Failed to push scrape result: %s", err)
+		logger.Warnf("Failed to push scrape response: %s", err)
 		return
 	}
 	logger.Info("Pushed scrape result")
