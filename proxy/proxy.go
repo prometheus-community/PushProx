@@ -4,11 +4,13 @@ import (
 	"bufio"
 	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
 	"io"
 	"io/ioutil"
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/prometheus/common/log"
 
@@ -21,6 +23,11 @@ func copyHttpResponse(resp *http.Response, w http.ResponseWriter) {
 	}
 	w.WriteHeader(resp.StatusCode)
 	io.Copy(w, resp.Body)
+}
+
+type targetGroup struct {
+	Targets []string          `json:"targets"`
+	Labels  map[string]string `json:"labels"`
 }
 
 func main() {
@@ -64,6 +71,17 @@ func main() {
 				log.With("scrape_id", scrapeResult.Header.Get("Id")).Infof("Error pushing: %s", err)
 				http.Error(w, fmt.Sprintf("Error pushing: %s", err.Error()), 500)
 			}
+			return
+		}
+
+		if r.URL.Path == "/clients" {
+			known := coordinator.KnownClients(time.Now().Add(-5 * time.Minute))
+			targets := make([]*targetGroup, 0, len(known))
+			for _, k := range known {
+				targets = append(targets, &targetGroup{Targets: []string{k}})
+			}
+			json.NewEncoder(w).Encode(targets)
+			log.With("client_count", len(known)).Info("Responded to /clients")
 			return
 		}
 

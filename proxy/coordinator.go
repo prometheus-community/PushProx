@@ -15,15 +15,21 @@ import (
 )
 
 type Coordinator struct {
-	mu        sync.Mutex
-	waiting   map[string]chan *http.Request
+	mu sync.Mutex
+
+	// Clients waiting for a scrape.
+	waiting map[string]chan *http.Request
+	// Responses from clients.
 	responses map[string]chan *http.Response
+	// Clients we know about and when they last contacted us.
+	known map[string]time.Time
 }
 
 func NewCoordinator() *Coordinator {
 	return &Coordinator{
 		waiting:   map[string]chan *http.Request{},
 		responses: map[string]chan *http.Response{},
+		known:     map[string]time.Time{},
 	}
 }
 
@@ -91,6 +97,7 @@ func (c *Coordinator) DoScrape(ctx context.Context, r *http.Request) (*http.Resp
 // Client registering to accept a scrape request. Blocking.
 func (c *Coordinator) WaitForScrapeInstruction(fqdn string) (*http.Request, error) {
 	log.With("fqdn", fqdn).Info("WaitForScrapeInstruction")
+	c.addKnownClient(fqdn)
 	// TODO: What if the client times out?
 	ch := c.getRequestChannel(fqdn)
 	for {
@@ -119,4 +126,25 @@ func (c *Coordinator) ScrapeResult(r *http.Response) error {
 		c.removeResponseChannel(id)
 		return ctx.Err()
 	}
+}
+
+func (c *Coordinator) addKnownClient(fqdn string) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	c.known[fqdn] = time.Now()
+}
+
+// What clients are alive as of the given time.
+func (c *Coordinator) KnownClients(since time.Time) []string {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	known := make([]string, 0, len(c.known))
+	for k, t := range c.known {
+		if since.Before(t) {
+			known = append(known, k)
+		}
+	}
+	return known
 }
