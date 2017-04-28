@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"flag"
 	"fmt"
 	"net/http"
 	"os"
@@ -12,6 +13,10 @@ import (
 	"github.com/prometheus/common/log"
 
 	"gitlab.com/robust-perception/tug_of_war/util"
+)
+
+var (
+	registrationTimeout = flag.Duration("registration.timeout", 5*time.Minute, "After how long a registration expires.")
 )
 
 type Coordinator struct {
@@ -26,11 +31,13 @@ type Coordinator struct {
 }
 
 func NewCoordinator() *Coordinator {
-	return &Coordinator{
+	c := &Coordinator{
 		waiting:   map[string]chan *http.Request{},
 		responses: map[string]chan *http.Response{},
 		known:     map[string]time.Time{},
 	}
+	go c.gc()
+	return c
 }
 
 var idCounter int64
@@ -135,16 +142,36 @@ func (c *Coordinator) addKnownClient(fqdn string) {
 	c.known[fqdn] = time.Now()
 }
 
-// What clients are alive as of the given time.
-func (c *Coordinator) KnownClients(since time.Time) []string {
+// What clients are alive.
+func (c *Coordinator) KnownClients() []string {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
+	limit := time.Now().Add(-*registrationTimeout)
 	known := make([]string, 0, len(c.known))
 	for k, t := range c.known {
-		if since.Before(t) {
+		if limit.Before(t) {
 			known = append(known, k)
 		}
 	}
 	return known
+}
+
+// Garbagee collect old clients.
+func (c *Coordinator) gc() {
+	for range time.Tick(1 * time.Minute) {
+		func() {
+			c.mu.Lock()
+			defer c.mu.Unlock()
+			limit := time.Now().Add(-*registrationTimeout)
+			deleted := 0
+			for k, ts := range c.known {
+				if ts.Before(limit) {
+					delete(c.known, k)
+					deleted++
+				}
+			}
+			log.With("deleted", deleted).With("remaining", len(c.known)).Info("GC of clients completed")
+		}()
+	}
 }

@@ -10,7 +10,6 @@ import (
 	"io/ioutil"
 	"net/http"
 	"strings"
-	"time"
 
 	"github.com/prometheus/common/log"
 
@@ -75,7 +74,7 @@ func main() {
 		}
 
 		if r.URL.Path == "/clients" {
-			known := coordinator.KnownClients(time.Now().Add(-5 * time.Minute))
+			known := coordinator.KnownClients()
 			targets := make([]*targetGroup, 0, len(known))
 			for _, k := range known {
 				targets = append(targets, &targetGroup{Targets: []string{k}})
