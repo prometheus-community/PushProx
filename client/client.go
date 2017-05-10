@@ -28,6 +28,15 @@ func doScrape(request *http.Request, client *http.Client) {
 	ctx, _ := context.WithTimeout(request.Context(), util.GetScrapeTimeout(request.Header))
 	request = request.WithContext(ctx)
 
+	// We cannot handle http requests at the proxy, as we would only
+	// see a CONNECT, so use a URL parameter to trigger it.
+	params := request.URL.Query()
+	if params.Get("_scheme") == "https" {
+		request.URL.Scheme = "https"
+		params.Del("_scheme")
+		request.URL.RawQuery = params.Encode()
+	}
+
 	scrapeResp, err := client.Do(request)
 	if err != nil {
 		msg := fmt.Sprintf("Failed to scrape %s: %s", request.URL.String(), err)
@@ -85,7 +94,7 @@ func loop() {
 	resp, err := client.Post(*proxyUrl+"/poll", "", strings.NewReader(*myFqdn))
 	if err != nil {
 		log.Infof("Error polling: %s", err)
-		time.Sleep(time.Second) // Don't pound the server.
+		time.Sleep(time.Second) // Don't pound the server. TODO: Randomised exponential backoff.
 		return
 	}
 	defer resp.Body.Close()
