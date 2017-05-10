@@ -107,7 +107,7 @@ func loop() {
 
 func main() {
 	flag.Parse()
-	log.Infof("Using FQDN of %s", *myFqdn)
+	log.With("proxy_url", *proxyUrl).Infof("Using FQDN of %s", *myFqdn)
 	for {
 		loop()
 	}
