@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"flag"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -14,6 +15,10 @@ import (
 	"github.com/prometheus/common/log"
 
 	"gitlab.com/robust-perception/tug_of_war/util"
+)
+
+var (
+	listenAddress = flag.String("web.listen-address", ":8080", "Address to listen on for proxy and client requests.")
 )
 
 func copyHttpResponse(resp *http.Response, w http.ResponseWriter) {
@@ -30,6 +35,7 @@ type targetGroup struct {
 }
 
 func main() {
+	flag.Parse()
 	coordinator := NewCoordinator()
 
 	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
@@ -87,5 +93,6 @@ func main() {
 		http.Error(w, "404: Unknown path", 404)
 	})
 
-	log.Fatal(http.ListenAndServe(":8080", nil))
+	log.With("address", *listenAddress).Info("Listening")
+	log.Fatal(http.ListenAndServe(*listenAddress, nil))
 }
