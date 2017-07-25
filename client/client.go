@@ -15,7 +15,7 @@ import (
 	"github.com/ShowMax/go-fqdn"
 	"github.com/prometheus/common/log"
 
-	"gitlab.com/robust-perception/tug_of_war/util"
+	"github.com/robustperception/pushprox/util"
 )
 
 var (
