@@ -65,5 +65,5 @@ sends it back to the proxy which passes it back to Prometheus.
 There is no authentication or authorisation included, a reverse proxy can be
 put in front though to add these.
 
-Running the client allows those with access to the proxy to access
-all network services on that machine.
+Running the client allows those with access to the proxy or the client to access
+all network services on the machine hosting the client.
