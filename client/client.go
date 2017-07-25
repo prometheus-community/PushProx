@@ -20,7 +20,7 @@ import (
 
 var (
 	myFqdn   = flag.String("fqdn", fqdn.Get(), "FQDN to register with")
-	proxyUrl = flag.String("proxy-url", "http://pushprox.robustperception.io:8080", "Push proxy to talk to.")
+	proxyUrl = flag.String("proxy-url", "", "Push proxy to talk to.")
 )
 
 func doScrape(request *http.Request, client *http.Client) {
@@ -107,6 +107,9 @@ func loop() {
 
 func main() {
 	flag.Parse()
+	if *proxyUrl == "" {
+		log.Fatal("-proxy-url flag must be specified.")
+	}
 	log.With("proxy_url", *proxyUrl).Infof("Using FQDN of %s", *myFqdn)
 	for {
 		loop()
