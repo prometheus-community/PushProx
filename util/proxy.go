@@ -1,15 +1,16 @@
 package util
 
 import (
-	"flag"
 	"net/http"
 	"strconv"
 	"time"
+
+	kingpin "gopkg.in/alecthomas/kingpin.v2"
 )
 
 var (
-	maxScrapeTimeout     = flag.Duration("scrape.max-timeout", 5*time.Minute, "Any scrape with a timeout higher than this will have to clamped to this.")
-	defaultScrapeTimeout = flag.Duration("scrape.default-timeout", 15*time.Second, "If a scrape lacks a timeout, use this value.")
+	maxScrapeTimeout     = kingpin.Flag("scrape.max-timeout", "Any scrape with a timeout higher than this will have to be clamped to this.").Default("5m").Duration()
+	defaultScrapeTimeout = kingpin.Flag("scrape.default-timeout", "If a scrape lacks a timeout, use this value.").Default("15s").Duration()
 )
 
 func GetScrapeTimeout(h http.Header) time.Duration {
