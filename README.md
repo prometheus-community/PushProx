@@ -25,7 +25,7 @@ Run the proxy somewhere both Prometheus and the clients can get to:
 
 On every target machine run the client, pointing it at the proxy:
 ```
-./client -proxy-url=http://proxy:8080/
+./client --proxy-url=http://proxy:8080/
 ```
 
 In Prometheus, use the proxy as a `proxy_url`:

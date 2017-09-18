@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"flag"
 	"fmt"
 	"net/http"
 	"os"
@@ -10,13 +9,15 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/prometheus/common/log"
+	kingpin "gopkg.in/alecthomas/kingpin.v2"
 
-	"github.com/robustperception/pushprox/util"
+	"github.com/go-kit/kit/log"
+	"github.com/go-kit/kit/log/level"
+	"github.com/robustperception/PushProx/util"
 )
 
 var (
-	registrationTimeout = flag.Duration("registration.timeout", 5*time.Minute, "After how long a registration expires.")
+	registrationTimeout = kingpin.Flag("registration.timeout", "After how long a registration expires.").Default("5m").Duration()
 )
 
 type Coordinator struct {
@@ -30,13 +31,13 @@ type Coordinator struct {
 	known map[string]time.Time
 }
 
-func NewCoordinator() *Coordinator {
+func NewCoordinator(logger log.Logger) *Coordinator {
 	c := &Coordinator{
 		waiting:   map[string]chan *http.Request{},
 		responses: map[string]chan *http.Response{},
 		known:     map[string]time.Time{},
 	}
-	go c.gc()
+	go c.gc(logger)
 	return c
 }
 
@@ -80,9 +81,9 @@ func (c *Coordinator) removeResponseChannel(id string) {
 }
 
 // Request a scrape.
-func (c *Coordinator) DoScrape(ctx context.Context, r *http.Request) (*http.Response, error) {
+func (c *Coordinator) DoScrape(ctx context.Context, r *http.Request, logger log.Logger) (*http.Response, error) {
 	id := genId()
-	log.With("scrape_id", id).With("url", r.URL.String()).Info("DoScrape")
+	level.Info(logger).Log("scrape_id", id, "url", r.URL.String(), "DoScrape")
 	r.Header.Add("Id", id)
 	select {
 	case <-ctx.Done():
@@ -102,8 +103,9 @@ func (c *Coordinator) DoScrape(ctx context.Context, r *http.Request) (*http.Resp
 }
 
 // Client registering to accept a scrape request. Blocking.
-func (c *Coordinator) WaitForScrapeInstruction(fqdn string) (*http.Request, error) {
-	log.With("fqdn", fqdn).Info("WaitForScrapeInstruction")
+func (c *Coordinator) WaitForScrapeInstruction(fqdn string, logger log.Logger) (*http.Request, error) {
+	level.Info(logger).Log("fqdn", fqdn, "url", "WaitForScrapeInstruction")
+
 	c.addKnownClient(fqdn)
 	// TODO: What if the client times out?
 	ch := c.getRequestChannel(fqdn)
@@ -119,9 +121,10 @@ func (c *Coordinator) WaitForScrapeInstruction(fqdn string) (*http.Request, erro
 }
 
 // Client sending a scrape result in.
-func (c *Coordinator) ScrapeResult(r *http.Response) error {
+func (c *Coordinator) ScrapeResult(r *http.Response, logger log.Logger) error {
 	id := r.Header.Get("Id")
-	log.With("scrape_id", id).Info("ScrapeResult")
+	level.Info(logger).Log("scrape_id", id, "url", "ScrapeResult")
+
 	ctx, _ := context.WithTimeout(context.Background(), util.GetScrapeTimeout(r.Header))
 	// Don't expose internal headers.
 	r.Header.Del("Id")
@@ -158,7 +161,7 @@ func (c *Coordinator) KnownClients() []string {
 }
 
 // Garbagee collect old clients.
-func (c *Coordinator) gc() {
+func (c *Coordinator) gc(logger log.Logger) {
 	for range time.Tick(1 * time.Minute) {
 		func() {
 			c.mu.Lock()
@@ -171,7 +174,7 @@ func (c *Coordinator) gc() {
 					deleted++
 				}
 			}
-			log.With("deleted", deleted).With("remaining", len(c.known)).Info("GC of clients completed")
+			level.Info(logger).Log("deleted", deleted, "remaining", len(c.known), "GC of clients completed")
 		}()
 	}
 }
