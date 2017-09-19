@@ -86,7 +86,7 @@ func (c *Coordinator) removeResponseChannel(id string) {
 // Request a scrape.
 func (c *Coordinator) DoScrape(ctx context.Context, r *http.Request) (*http.Response, error) {
 	id := genId()
-	level.Info(c.logger).Log("scrape_id", id, "url", r.URL.String(), "DoScrape")
+	level.Info(c.logger).Log("msg", "DoScrape", "scrape_id", id, "url", r.URL.String())
 	r.Header.Add("Id", id)
 	select {
 	case <-ctx.Done():
@@ -107,7 +107,7 @@ func (c *Coordinator) DoScrape(ctx context.Context, r *http.Request) (*http.Resp
 
 // Client registering to accept a scrape request. Blocking.
 func (c *Coordinator) WaitForScrapeInstruction(fqdn string) (*http.Request, error) {
-	level.Info(c.logger).Log("fqdn", fqdn, "url", "WaitForScrapeInstruction")
+	level.Info(c.logger).Log("msg", "WaitForScrapeInstruction", "fqdn", fqdn)
 
 	c.addKnownClient(fqdn)
 	// TODO: What if the client times out?
@@ -126,8 +126,7 @@ func (c *Coordinator) WaitForScrapeInstruction(fqdn string) (*http.Request, erro
 // Client sending a scrape result in.
 func (c *Coordinator) ScrapeResult(r *http.Response) error {
 	id := r.Header.Get("Id")
-	level.Info(c.logger).Log("scrape_id", id, "url", "ScrapeResult")
-
+	level.Info(c.logger).Log("msg", "ScrapeResult", "scrape_id", id)
 	ctx, _ := context.WithTimeout(context.Background(), util.GetScrapeTimeout(r.Header))
 	// Don't expose internal headers.
 	r.Header.Del("Id")
@@ -177,7 +176,7 @@ func (c *Coordinator) gc() {
 					deleted++
 				}
 			}
-			level.Info(c.logger).Log("deleted", deleted, "remaining", len(c.known), "GC of clients completed")
+			level.Info(c.logger).Log("msg", "GC of clients completed", "deleted", deleted, "remaining", len(c.known))
 		}()
 	}
 }

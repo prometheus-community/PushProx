@@ -55,7 +55,7 @@ func main() {
 
 			resp, err := coordinator.DoScrape(ctx, request)
 			if err != nil {
-				level.Error(logger).Log("url", "Error scraping: %s", err)
+				level.Error(logger).Log("msg", "Error scraping:", "err", err, "url", request.URL.String())
 				http.Error(w, fmt.Sprintf("Error scraping %q: %s", request.URL.String(), err.Error()), 500)
 				return
 			}
@@ -69,7 +69,7 @@ func main() {
 			fqdn, _ := ioutil.ReadAll(r.Body)
 			request, _ := coordinator.WaitForScrapeInstruction(strings.TrimSpace(string(fqdn)))
 			request.WriteProxy(w) // Send full request as the body of the response.
-			level.Info(logger).Log("url", request.URL.String(), "scrape_id", request.Header.Get("Id"), "Responded to /poll")
+			level.Info(logger).Log("msg", "Responded to /poll", "url", request.URL.String(), "scrape_id", request.Header.Get("Id"))
 			return
 		}
 
@@ -78,10 +78,10 @@ func main() {
 			buf := &bytes.Buffer{}
 			io.Copy(buf, r.Body)
 			scrapeResult, _ := http.ReadResponse(bufio.NewReader(buf), nil)
-			level.Info(logger).Log("scrape_id", scrapeResult.Header.Get("Id"), "Got /push")
+			level.Info(logger).Log("msg", "Got /push", "scrape_id", scrapeResult.Header.Get("Id"))
 			err := coordinator.ScrapeResult(scrapeResult)
 			if err != nil {
-				level.Error(logger).Log("scrape_id", scrapeResult.Header.Get("Id"), "Error pushing: %s", err)
+				level.Error(logger).Log("msg", "Error pushing:", "err", err, "scrape_id", scrapeResult.Header.Get("Id"))
 				http.Error(w, fmt.Sprintf("Error pushing: %s", err.Error()), 500)
 			}
 			return
@@ -94,13 +94,13 @@ func main() {
 				targets = append(targets, &targetGroup{Targets: []string{k}})
 			}
 			json.NewEncoder(w).Encode(targets)
-			level.Error(logger).Log("client_count", len(known), "Responded to /clients")
+			level.Error(logger).Log("msg", "Responded to /clients", "client_count", len(known))
 			return
 		}
 
 		http.Error(w, "404: Unknown path", 404)
 	})
 
-	level.Info(logger).Log("address", *listenAddress, "Listening")
+	level.Info(logger).Log("msg", "Listening", "address", *listenAddress)
 	log.Fatal(http.ListenAndServe(*listenAddress, nil))
 }
