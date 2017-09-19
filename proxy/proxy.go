@@ -5,23 +5,27 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
-	"flag"
 	"fmt"
 	"io"
 	"io/ioutil"
 	"net/http"
 	"strings"
 
+	kingpin "gopkg.in/alecthomas/kingpin.v2"
+
+	"github.com/go-kit/kit/log/level"
 	"github.com/prometheus/common/log"
+	"github.com/prometheus/common/promlog"
+	"github.com/prometheus/common/promlog/flag"
 
 	"github.com/robustperception/pushprox/util"
 )
 
 var (
-	listenAddress = flag.String("web.listen-address", ":8080", "Address to listen on for proxy and client requests.")
+	listenAddress = kingpin.Flag("web.listen-address", "Address to listen on for proxy and client requests.").Default(":8080").String()
 )
 
-func copyHttpResponse(resp *http.Response, w http.ResponseWriter) {
+func copyHTTPResponse(resp *http.Response, w http.ResponseWriter) {
 	for k, v := range resp.Header {
 		w.Header()[k] = v
 	}
@@ -35,8 +39,12 @@ type targetGroup struct {
 }
 
 func main() {
-	flag.Parse()
-	coordinator := NewCoordinator()
+	allowedLevel := promlog.AllowedLevel{}
+	flag.AddFlags(kingpin.CommandLine, &allowedLevel)
+	kingpin.HelpFlag.Short('h')
+	kingpin.Parse()
+	logger := promlog.New(allowedLevel)
+	coordinator := NewCoordinator(logger)
 
 	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		// Proxy request
@@ -47,12 +55,12 @@ func main() {
 
 			resp, err := coordinator.DoScrape(ctx, request)
 			if err != nil {
-				log.With("url", request.URL.String()).Infof("Error scraping: %s", err)
+				level.Error(logger).Log("url", "Error scraping: %s", err)
 				http.Error(w, fmt.Sprintf("Error scraping %q: %s", request.URL.String(), err.Error()), 500)
 				return
 			}
 			defer resp.Body.Close()
-			copyHttpResponse(resp, w)
+			copyHTTPResponse(resp, w)
 			return
 		}
 
@@ -61,7 +69,7 @@ func main() {
 			fqdn, _ := ioutil.ReadAll(r.Body)
 			request, _ := coordinator.WaitForScrapeInstruction(strings.TrimSpace(string(fqdn)))
 			request.WriteProxy(w) // Send full request as the body of the response.
-			log.With("url", request.URL.String()).With("scrape_id", request.Header.Get("Id")).Info("Responded to /poll")
+			level.Info(logger).Log("url", request.URL.String(), "scrape_id", request.Header.Get("Id"), "Responded to /poll")
 			return
 		}
 
@@ -70,10 +78,10 @@ func main() {
 			buf := &bytes.Buffer{}
 			io.Copy(buf, r.Body)
 			scrapeResult, _ := http.ReadResponse(bufio.NewReader(buf), nil)
-			log.With("scrape_id", scrapeResult.Header.Get("Id")).Info("Got /push")
+			level.Info(logger).Log("scrape_id", scrapeResult.Header.Get("Id"), "Got /push")
 			err := coordinator.ScrapeResult(scrapeResult)
 			if err != nil {
-				log.With("scrape_id", scrapeResult.Header.Get("Id")).Infof("Error pushing: %s", err)
+				level.Error(logger).Log("scrape_id", scrapeResult.Header.Get("Id"), "Error pushing: %s", err)
 				http.Error(w, fmt.Sprintf("Error pushing: %s", err.Error()), 500)
 			}
 			return
@@ -86,13 +94,13 @@ func main() {
 				targets = append(targets, &targetGroup{Targets: []string{k}})
 			}
 			json.NewEncoder(w).Encode(targets)
-			log.With("client_count", len(known)).Info("Responded to /clients")
+			level.Error(logger).Log("client_count", len(known), "Responded to /clients")
 			return
 		}
 
 		http.Error(w, "404: Unknown path", 404)
 	})
 
-	log.With("address", *listenAddress).Info("Listening")
+	level.Info(logger).Log("address", *listenAddress, "Listening")
 	log.Fatal(http.ListenAndServe(*listenAddress, nil))
 }
