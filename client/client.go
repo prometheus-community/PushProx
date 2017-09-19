@@ -8,6 +8,7 @@ import (
 	"io/ioutil"
 	"net/http"
 	"net/url"
+	"os"
 	"strings"
 	"time"
 
@@ -26,12 +27,14 @@ var (
 	proxyURL = kingpin.Flag("proxy-url", "Push proxy to talk to.").Required().String()
 )
 
-func doScrape(request *http.Request, client *http.Client, logger log.Logger) {
-	level.Info(logger).Log("scrap_id", request.Header.Get("id"))
+type Coordinator struct {
+	logger log.Logger
+}
 
+func (c *Coordinator) doScrape(request *http.Request, client *http.Client) {
+	logger := log.With(c.logger, "scrape_id", request.Header.Get("id"))
 	ctx, _ := context.WithTimeout(request.Context(), util.GetScrapeTimeout(request.Header))
 	request = request.WithContext(ctx)
-
 	// We cannot handle http requests at the proxy, as we would only
 	// see a CONNECT, so use a URL parameter to trigger it.
 	params := request.URL.Query()
@@ -44,31 +47,31 @@ func doScrape(request *http.Request, client *http.Client, logger log.Logger) {
 	scrapeResp, err := client.Do(request)
 	if err != nil {
 		msg := fmt.Sprintf("Failed to scrape %s: %s", request.URL.String(), err)
-		level.Warn(logger).Log(msg)
+		level.Warn(logger).Log("msg", "Failed to scrape", "Request URL", request.URL.String(), "err", err)
 		resp := &http.Response{
 			StatusCode: 500,
 			Header:     http.Header{},
 			Body:       ioutil.NopCloser(strings.NewReader(msg)),
 		}
-		err = doPush(resp, request, client)
+		err = c.doPush(resp, request, client)
 		if err != nil {
-			level.Warn(logger).Log("Failed to push failed scrape response:", err)
+			level.Warn(logger).Log("msg", "Failed to push failed scrape response:", "err", err)
 			return
 		}
-		level.Info(logger).Log("Pushed failed scrape response")
+		level.Info(logger).Log("msg", "Pushed failed scrape response")
 		return
 	}
-	level.Info(logger).Log("Retrieved scrape response")
-	err = doPush(scrapeResp, request, client)
+	level.Info(logger).Log("msg", "Retrieved scrape response")
+	err = c.doPush(scrapeResp, request, client)
 	if err != nil {
-		level.Warn(logger).Log("Failed to push scrape response:", err)
+		level.Warn(logger).Log("msg", "Failed to push scrape response:", "err", err)
 		return
 	}
-	level.Info(logger).Log("Pushed scrape result")
+	level.Info(logger).Log("msg", "Pushed scrape result")
 }
 
 // Report the result of the scrape back up to the proxy.
-func doPush(resp *http.Response, origRequest *http.Request, client *http.Client) error {
+func (c *Coordinator) doPush(resp *http.Response, origRequest *http.Request, client *http.Client) error {
 	resp.Header.Set("id", origRequest.Header.Get("id")) // Link the request and response
 	// Remaining scrape deadline.
 	deadline, _ := origRequest.Context().Deadline()
@@ -92,21 +95,21 @@ func doPush(resp *http.Response, origRequest *http.Request, client *http.Client)
 	return nil
 }
 
-func loop(logger log.Logger) {
+func loop(c Coordinator) {
 	client := &http.Client{}
 	resp, err := client.Post(*proxyURL+"/poll", "", strings.NewReader(*myFqdn))
 	if err != nil {
-		level.Info(logger).Log("Error polling:", err)
+		level.Error(c.logger).Log("msg", "Error polling:", "err", err)
 		time.Sleep(time.Second) // Don't pound the server. TODO: Randomised exponential backoff.
 		return
 	}
 	defer resp.Body.Close()
 	request, _ := http.ReadRequest(bufio.NewReader(resp.Body))
-	level.Error(logger).Log("scrape_id", request.Header.Get("id"), "url", request.URL, "Got scrape request")
+	level.Info(c.logger).Log("msg", "Got scrape request", "scrape_id", request.Header.Get("id"), "url", request.URL)
 
 	request.RequestURI = ""
 
-	go doScrape(request, client, logger)
+	go c.doScrape(request, client)
 }
 
 func main() {
@@ -115,12 +118,13 @@ func main() {
 	kingpin.HelpFlag.Short('h')
 	kingpin.Parse()
 	logger := promlog.New(allowedLevel)
+	coordinator := Coordinator{logger: logger}
 	if *proxyURL == "" {
-		level.Error(logger).Log("-proxy-url flag must be specified.")
+		level.Error(coordinator.logger).Log("msg", "-proxy-url flag must be specified.")
+		os.Exit(1)
 	}
-	level.Info(logger).Log("proxy_url", *proxyURL, "Using FQDN of", *myFqdn)
-
+	level.Info(coordinator.logger).Log("msg", "URL and FQDN info", "proxy_url", *proxyURL, "Using FQDN of", *myFqdn)
 	for {
-		loop(logger)
+		loop(coordinator)
 	}
 }
