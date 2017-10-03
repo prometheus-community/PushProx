@@ -77,18 +77,26 @@ func (c *Coordinator) doPush(resp *http.Response, origRequest *http.Request, cli
 	deadline, _ := origRequest.Context().Deadline()
 	resp.Header.Set("X-Prometheus-Scrape-Timeout", fmt.Sprintf("%f", float64(time.Until(deadline))/1e9))
 
-	u, _ := url.Parse(*proxyURL + "/push")
+	base, err := url.Parse(*proxyURL)
+	if err != nil {
+		return err
+	}
+	u, err := url.Parse("/post")
+	if err != nil {
+		return err
+	}
+	url := base.ResolveReference(u)
 
 	buf := &bytes.Buffer{}
 	resp.Write(buf)
 	request := &http.Request{
 		Method:        "POST",
-		URL:           u,
+		URL:           url,
 		Body:          ioutil.NopCloser(buf),
 		ContentLength: int64(buf.Len()),
 	}
 	request = request.WithContext(origRequest.Context())
-	_, err := client.Do(request)
+	_, err = client.Do(request)
 	if err != nil {
 		return err
 	}
@@ -97,7 +105,18 @@ func (c *Coordinator) doPush(resp *http.Response, origRequest *http.Request, cli
 
 func loop(c Coordinator) {
 	client := &http.Client{}
-	resp, err := client.Post(*proxyURL+"/poll", "", strings.NewReader(*myFqdn))
+	base, err := url.Parse(*proxyURL)
+	if err != nil {
+		level.Error(c.logger).Log("msg", "Error parsing url:", "err", err)
+		return
+	}
+	u, err := url.Parse("/poll")
+	if err != nil {
+		level.Error(c.logger).Log("msg", "Error parsing url:", "err", err)
+		return
+	}
+	url := base.ResolveReference(u)
+	resp, err := client.Post(url.String(), "", strings.NewReader(*myFqdn))
 	if err != nil {
 		level.Error(c.logger).Log("msg", "Error polling:", "err", err)
 		time.Sleep(time.Second) // Don't pound the server. TODO: Randomised exponential backoff.
