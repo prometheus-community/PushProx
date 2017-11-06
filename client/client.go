@@ -81,7 +81,7 @@ func (c *Coordinator) doPush(resp *http.Response, origRequest *http.Request, cli
 	if err != nil {
 		return err
 	}
-	u, err := url.Parse("/post")
+	u, err := url.Parse("/push")
 	if err != nil {
 		return err
 	}
