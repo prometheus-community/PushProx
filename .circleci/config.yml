@@ -1,0 +1,53 @@
+version: 2
+jobs:
+  build:
+    docker:
+      - image: circleci/golang:1.9
+    working_directory: /go/src/github.com/robustperception/pushprox
+    steps:
+      - checkout
+      - run:
+          name: Build proxy
+          command: |
+              cd /go/src/github.com/robustperception/pushprox/proxy
+              go get
+              go build
+      - run:
+          name: Build client
+          command: |
+              cd /go/src/github.com/robustperception/pushprox/client
+              go get
+              go build
+      - run:
+          name: Download and untar node_exporter
+          command: |
+              wget https://github.com/prometheus/node_exporter/releases/download/v0.15.1/node_exporter-0.15.1.linux-amd64.tar.gz
+              tar xzf node_exporter-0.15.1.linux-amd64.tar.gz
+      - run:
+          name: Download, untar, and configure Prometheus
+          command: |
+              wget https://github.com/prometheus/prometheus/releases/download/v2.0.0/prometheus-2.0.0.linux-amd64.tar.gz
+              tar xzf prometheus-2.0.0.linux-amd64.tar.gz
+              cd prometheus-2.0.0.linux-amd64
+              rm prometheus.yml
+              cat << EOF > prometheus.yml
+              global:
+                scrape_interval: 1s
+              scrape_configs:
+                - job_name: pushprox
+                  proxy_url: http://127.0.0.1:8080
+                  static_configs:
+                    - targets: ['$(hostname):9100']
+              EOF
+      - run:
+          name: Run everything and test that Prometheus can scrape node_exporter via pushprox
+          command: |
+              ./node_exporter-0.15.1.linux-amd64/node_exporter &
+              ./proxy/proxy &
+              ./client/client --proxy-url=http://127.0.0.1:8080 &
+              ./prometheus-2.0.0.linux-amd64/prometheus --config.file=prometheus-2.0.0.linux-amd64/prometheus.yml  &
+              sleep 5
+              res=`curl -g http://localhost:9090/api/v1/query?query=node_cpu | jq '.data.result | length'`
+              if [ $res == 0 ]; then
+                  exit 1
+              fi
