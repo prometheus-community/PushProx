@@ -1,4 +1,4 @@
-# PushProx
+# PushProx [![CircleCI](https://circleci.com/gh/RobustPerception/PushProx.svg?style=shield)](https://circleci.com/gh/RobustPerception/PushProx)
 
 PushProx is a client and proxy that allows transversing of NAT and other
 similar network topologies by Prometheus, while still following the pull model.
