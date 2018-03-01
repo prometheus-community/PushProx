@@ -123,7 +123,11 @@ func loop(c Coordinator) {
 		return
 	}
 	defer resp.Body.Close()
-	request, _ := http.ReadRequest(bufio.NewReader(resp.Body))
+	request, err := http.ReadRequest(bufio.NewReader(resp.Body))
+	if err != nil {
+		level.Error(c.logger).Log("msg", "Error reading request:", "err", err)
+		return
+	}
 	level.Info(c.logger).Log("msg", "Got scrape request", "scrape_id", request.Header.Get("id"), "url", request.URL)
 
 	request.RequestURI = ""
