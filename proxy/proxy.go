@@ -94,7 +94,7 @@ func main() {
 				targets = append(targets, &targetGroup{Targets: []string{k}})
 			}
 			json.NewEncoder(w).Encode(targets)
-			level.Error(logger).Log("msg", "Responded to /clients", "client_count", len(known))
+			level.Info(logger).Log("msg", "Responded to /clients", "client_count", len(known))
 			return
 		}
 
