@@ -25,6 +25,7 @@ import (
 var (
 	myFqdn   = kingpin.Flag("fqdn", "FQDN to register with").Default(fqdn.Get()).String()
 	proxyURL = kingpin.Flag("proxy-url", "Push proxy to talk to.").Required().String()
+	pollTimeout = kingpin.Flag("poll.timeout", "After how long a poll expires.").Default("5m").Duration()
 )
 
 type Coordinator struct {
@@ -104,7 +105,7 @@ func (c *Coordinator) doPush(resp *http.Response, origRequest *http.Request, cli
 }
 
 func loop(c Coordinator) {
-	client := &http.Client{}
+	client := &http.Client{Timeout: *pollTimeout}
 	base, err := url.Parse(*proxyURL)
 	if err != nil {
 		level.Error(c.logger).Log("msg", "Error parsing url:", "err", err)
