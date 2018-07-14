@@ -67,7 +67,12 @@ func main() {
 		// Client registering and asking for scrapes.
 		if r.URL.Path == "/poll" {
 			fqdn, _ := ioutil.ReadAll(r.Body)
-			request, _ := coordinator.WaitForScrapeInstruction(strings.TrimSpace(string(fqdn)))
+			request, err := coordinator.WaitForScrapeInstruction(strings.TrimSpace(string(fqdn)))
+			if err != nil {
+				level.Info(logger).Log("msg", "Request is expired")
+				http.Error(w, "request is expired", 408)
+				return
+			}
 			request.WriteProxy(w) // Send full request as the body of the response.
 			level.Info(logger).Log("msg", "Responded to /poll", "url", request.URL.String(), "scrape_id", request.Header.Get("Id"))
 			return
