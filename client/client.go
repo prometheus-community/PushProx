@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"io/ioutil"
 	"net/http"
@@ -103,36 +104,37 @@ func (c *Coordinator) doPush(resp *http.Response, origRequest *http.Request, cli
 	return nil
 }
 
-func loop(c Coordinator) {
+func loop(c Coordinator) error {
 	client := &http.Client{}
 	base, err := url.Parse(*proxyURL)
 	if err != nil {
 		level.Error(c.logger).Log("msg", "Error parsing url:", "err", err)
-		return
+		return errors.New("error parsing url")
 	}
 	u, err := url.Parse("/poll")
 	if err != nil {
 		level.Error(c.logger).Log("msg", "Error parsing url:", "err", err)
-		return
+		return errors.New("error parsing url poll")
 	}
 	url := base.ResolveReference(u)
 	resp, err := client.Post(url.String(), "", strings.NewReader(*myFqdn))
 	if err != nil {
 		level.Error(c.logger).Log("msg", "Error polling:", "err", err)
-		time.Sleep(time.Second) // Don't pound the server. TODO: Randomised exponential backoff.
-		return
+		return errors.New("error polling")
 	}
 	defer resp.Body.Close()
 	request, err := http.ReadRequest(bufio.NewReader(resp.Body))
 	if err != nil {
 		level.Error(c.logger).Log("msg", "Error reading request:", "err", err)
-		return
+		return errors.New("error reading request")
 	}
 	level.Info(c.logger).Log("msg", "Got scrape request", "scrape_id", request.Header.Get("id"), "url", request.URL)
 
 	request.RequestURI = ""
 
 	go c.doScrape(request, client)
+
+	return nil
 }
 
 func main() {
@@ -148,6 +150,9 @@ func main() {
 	}
 	level.Info(coordinator.logger).Log("msg", "URL and FQDN info", "proxy_url", *proxyURL, "Using FQDN of", *myFqdn)
 	for {
-		loop(coordinator)
+		err := loop(coordinator)
+		if err != nil {
+			time.Sleep(time.Second) // Don't pound the server. TODO: Randomised exponential backoff.
+		}
 	}
 }
