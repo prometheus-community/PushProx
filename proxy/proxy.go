@@ -69,8 +69,8 @@ func main() {
 			fqdn, _ := ioutil.ReadAll(r.Body)
 			request, err := coordinator.WaitForScrapeInstruction(strings.TrimSpace(string(fqdn)))
 			if err != nil {
-				level.Info(logger).Log("msg", "Request is expired")
-				http.Error(w, "request is expired", 408)
+				level.Info(logger).Log("msg", "Error WaitForScrapeInstruction:", "err", err)
+				http.Error(w, fmt.Sprintf("Error WaitForScrapeInstruction: %s", err.Error()), 408)
 				return
 			}
 			request.WriteProxy(w) // Send full request as the body of the response.
