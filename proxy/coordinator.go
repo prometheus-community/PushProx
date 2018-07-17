@@ -112,8 +112,21 @@ func (c *Coordinator) WaitForScrapeInstruction(fqdn string) (*http.Request, erro
 	c.addKnownClient(fqdn)
 	// TODO: What if the client times out?
 	ch := c.getRequestChannel(fqdn)
+
+	// exhaust existing poll request (eg. timeouted queues)
+	select {
+	case ch <- nil:
+		//
+	default:
+		break
+	}
+
 	for {
 		request := <-ch
+		if request == nil {
+			return nil, fmt.Errorf("request is expired")
+		}
+
 		select {
 		case <-request.Context().Done():
 			// Request has timed out, get another one.
