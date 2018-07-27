@@ -9,6 +9,7 @@ import (
 	"io/ioutil"
 	"net/http"
 	"net/url"
+	"net"
 	"os"
 	"strings"
 	"time"
@@ -26,10 +27,27 @@ import (
 var (
 	myFqdn   = kingpin.Flag("fqdn", "FQDN to register with").Default(fqdn.Get()).String()
 	proxyURL = kingpin.Flag("proxy-url", "Push proxy to talk to.").Required().String()
+	allowedPorts = kingpin.Flag("allowed-ports", "Allowed ports (comma separated)").String()
 )
 
 type Coordinator struct {
 	logger log.Logger
+}
+
+func isWhitelisted(request *http.Request) bool {
+    _, destPort, _ := net.SplitHostPort(request.Host)
+
+    var isPortWhitelisted = false
+    if *allowedPorts == "" {
+        isPortWhitelisted = true
+    }
+    for _, whitelistPort := range strings.Split(*allowedPorts, ",") {
+        if whitelistPort == destPort {
+            isPortWhitelisted = true
+            break
+        }
+    }
+    return isPortWhitelisted
 }
 
 func (c *Coordinator) doScrape(request *http.Request, client *http.Client) {
@@ -44,6 +62,11 @@ func (c *Coordinator) doScrape(request *http.Request, client *http.Client) {
 		params.Del("_scheme")
 		request.URL.RawQuery = params.Encode()
 	}
+
+    if ! isWhitelisted(request) {
+        level.Warn(logger).Log("msg", "Access to non whitelisted port")
+        return
+    }
 
 	scrapeResp, err := client.Do(request)
 	if err != nil {
