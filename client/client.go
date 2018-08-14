@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"context"
 	"crypto/tls"
+	"crypto/x509"
 	"errors"
 	"fmt"
 	"io/ioutil"
@@ -25,11 +26,11 @@ import (
 )
 
 var (
-	myFqdn   = kingpin.Flag("fqdn", "FQDN to register with").Default(fqdn.Get()).String()
-	proxyURL = kingpin.Flag("proxy-url", "Push proxy to talk to.").Required().String()
-	caCert   = kingpin.Flag("cacert", "<file> CA certificate to verify peer against").String()
-	tlsCert  = kingpin.Flag("cert", "<cert> Client certificate file").String()
-	tlsKey   = kingpin.Flag("key", "<key> Private key file name").String()
+	myFqdn     = kingpin.Flag("fqdn", "FQDN to register with").Default(fqdn.Get()).String()
+	proxyURL   = kingpin.Flag("proxy-url", "Push proxy to talk to.").Required().String()
+	caCertFile = kingpin.Flag("cacert", "<file> CA certificate to verify peer against").String()
+	tlsCert    = kingpin.Flag("cert", "<cert> Client certificate file").String()
+	tlsKey     = kingpin.Flag("key", "<key> Private key file name").String()
 )
 
 type Coordinator struct {
@@ -127,6 +128,7 @@ func loop(c Coordinator, t *http.Transport) error {
 		return errors.New("error polling")
 	}
 	defer resp.Body.Close()
+
 	request, err := http.ReadRequest(bufio.NewReader(resp.Body))
 	if err != nil {
 		level.Error(c.logger).Log("msg", "Error reading request:", "err", err)
@@ -154,7 +156,7 @@ func main() {
 	}
 	level.Info(coordinator.logger).Log("msg", "URL and FQDN info", "proxy_url", *proxyURL, "Using FQDN of", *myFqdn)
 
-	var tlsConfig *tls.Config
+	tlsConfig := &tls.Config{}
 	if *tlsCert != "" {
 		cert, err := tls.LoadX509KeyPair(*tlsCert, *tlsKey)
 		if err != nil {
@@ -163,13 +165,23 @@ func main() {
 		}
 
 		// Setup HTTPS client
-		tlsConfig = &tls.Config{
-			Certificates: []tls.Certificate{cert},
-		}
+		tlsConfig.Certificates = []tls.Certificate{cert}
+
 		tlsConfig.BuildNameToCertificate()
-	} else {
-		tlsConfig = &tls.Config{}
 	}
+
+	if *caCertFile != "" {
+		caCert, err := ioutil.ReadFile(*caCertFile)
+		if err != nil {
+			level.Error(coordinator.logger).Log("msg", "Not able to read cacert file")
+			os.Exit(1)
+		}
+		caCertPool := x509.NewCertPool()
+		caCertPool.AppendCertsFromPEM(caCert)
+
+		tlsConfig.RootCAs = caCertPool
+	}
+
 	transport := &http.Transport{TLSClientConfig: tlsConfig}
 
 	for {
