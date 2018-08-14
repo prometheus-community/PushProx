@@ -82,7 +82,7 @@ func (c *Coordinator) doPush(resp *http.Response, origRequest *http.Request, cli
 	if err != nil {
 		return err
 	}
-	u, err := url.Parse("/push")
+	u, err := url.Parse("push")
 	if err != nil {
 		return err
 	}
@@ -111,7 +111,7 @@ func loop(c Coordinator) error {
 		level.Error(c.logger).Log("msg", "Error parsing url:", "err", err)
 		return errors.New("error parsing url")
 	}
-	u, err := url.Parse("/poll")
+	u, err := url.Parse("poll")
 	if err != nil {
 		level.Error(c.logger).Log("msg", "Error parsing url:", "err", err)
 		return errors.New("error parsing url poll")
