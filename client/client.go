@@ -28,9 +28,9 @@ import (
 var (
 	myFqdn     = kingpin.Flag("fqdn", "FQDN to register with").Default(fqdn.Get()).String()
 	proxyURL   = kingpin.Flag("proxy-url", "Push proxy to talk to.").Required().String()
-	caCertFile = kingpin.Flag("cacert", "<file> CA certificate to verify peer against").String()
-	tlsCert    = kingpin.Flag("cert", "<cert> Client certificate file").String()
-	tlsKey     = kingpin.Flag("key", "<key> Private key file name").String()
+	caCertFile = kingpin.Flag("tls_cacert", "<file> CA certificate to verify peer against").String()
+	tlsCert    = kingpin.Flag("tls_cert", "<cert> Client certificate file").String()
+	tlsKey     = kingpin.Flag("tls_key", "<key> Private key file").String()
 )
 
 type Coordinator struct {
@@ -160,7 +160,7 @@ func main() {
 	if *tlsCert != "" {
 		cert, err := tls.LoadX509KeyPair(*tlsCert, *tlsKey)
 		if err != nil {
-			level.Error(coordinator.logger).Log("msg", "Certificate or Key is invalid")
+			level.Error(coordinator.logger).Log("msg", "Certificate or Key is invalid", "err", err)
 			os.Exit(1)
 		}
 
@@ -173,7 +173,7 @@ func main() {
 	if *caCertFile != "" {
 		caCert, err := ioutil.ReadFile(*caCertFile)
 		if err != nil {
-			level.Error(coordinator.logger).Log("msg", "Not able to read cacert file")
+			level.Error(coordinator.logger).Log("msg", "Not able to read cacert file", "err", err)
 			os.Exit(1)
 		}
 		caCertPool := x509.NewCertPool()
