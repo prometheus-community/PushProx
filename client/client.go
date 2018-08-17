@@ -28,9 +28,9 @@ import (
 var (
 	myFqdn     = kingpin.Flag("fqdn", "FQDN to register with").Default(fqdn.Get()).String()
 	proxyURL   = kingpin.Flag("proxy-url", "Push proxy to talk to.").Required().String()
-	caCertFile = kingpin.Flag("tls_cacert", "<file> CA certificate to verify peer against").String()
-	tlsCert    = kingpin.Flag("tls_cert", "<cert> Client certificate file").String()
-	tlsKey     = kingpin.Flag("tls_key", "<key> Private key file").String()
+	caCertFile = kingpin.Flag("tls.cacert", "<file> CA certificate to verify peer against").String()
+	tlsCert    = kingpin.Flag("tls.cert", "<cert> Client certificate file").String()
+	tlsKey     = kingpin.Flag("tls.key", "<key> Private key file").String()
 )
 
 type Coordinator struct {
