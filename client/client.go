@@ -4,6 +4,8 @@ import (
 	"bufio"
 	"bytes"
 	"context"
+	"crypto/tls"
+	"crypto/x509"
 	"errors"
 	"fmt"
 	"io/ioutil"
@@ -24,8 +26,11 @@ import (
 )
 
 var (
-	myFqdn   = kingpin.Flag("fqdn", "FQDN to register with").Default(fqdn.Get()).String()
-	proxyURL = kingpin.Flag("proxy-url", "Push proxy to talk to.").Required().String()
+	myFqdn     = kingpin.Flag("fqdn", "FQDN to register with").Default(fqdn.Get()).String()
+	proxyURL   = kingpin.Flag("proxy-url", "Push proxy to talk to.").Required().String()
+	caCertFile = kingpin.Flag("tls.cacert", "<file> CA certificate to verify peer against").String()
+	tlsCert    = kingpin.Flag("tls.cert", "<cert> Client certificate file").String()
+	tlsKey     = kingpin.Flag("tls.key", "<key> Private key file").String()
 )
 
 type Coordinator struct {
@@ -104,8 +109,8 @@ func (c *Coordinator) doPush(resp *http.Response, origRequest *http.Request, cli
 	return nil
 }
 
-func loop(c Coordinator) error {
-	client := &http.Client{}
+func loop(c Coordinator, t *http.Transport) error {
+	client := &http.Client{Transport: t}
 	base, err := url.Parse(*proxyURL)
 	if err != nil {
 		level.Error(c.logger).Log("msg", "Error parsing url:", "err", err)
@@ -123,6 +128,7 @@ func loop(c Coordinator) error {
 		return errors.New("error polling")
 	}
 	defer resp.Body.Close()
+
 	request, err := http.ReadRequest(bufio.NewReader(resp.Body))
 	if err != nil {
 		level.Error(c.logger).Log("msg", "Error reading request:", "err", err)
@@ -149,8 +155,37 @@ func main() {
 		os.Exit(1)
 	}
 	level.Info(coordinator.logger).Log("msg", "URL and FQDN info", "proxy_url", *proxyURL, "Using FQDN of", *myFqdn)
+
+	tlsConfig := &tls.Config{}
+	if *tlsCert != "" {
+		cert, err := tls.LoadX509KeyPair(*tlsCert, *tlsKey)
+		if err != nil {
+			level.Error(coordinator.logger).Log("msg", "Certificate or Key is invalid", "err", err)
+			os.Exit(1)
+		}
+
+		// Setup HTTPS client
+		tlsConfig.Certificates = []tls.Certificate{cert}
+
+		tlsConfig.BuildNameToCertificate()
+	}
+
+	if *caCertFile != "" {
+		caCert, err := ioutil.ReadFile(*caCertFile)
+		if err != nil {
+			level.Error(coordinator.logger).Log("msg", "Not able to read cacert file", "err", err)
+			os.Exit(1)
+		}
+		caCertPool := x509.NewCertPool()
+		caCertPool.AppendCertsFromPEM(caCert)
+
+		tlsConfig.RootCAs = caCertPool
+	}
+
+	transport := &http.Transport{TLSClientConfig: tlsConfig}
+
 	for {
-		err := loop(coordinator)
+		err := loop(coordinator, transport)
 		if err != nil {
 			time.Sleep(time.Second) // Don't pound the server. TODO: Randomised exponential backoff.
 		}
