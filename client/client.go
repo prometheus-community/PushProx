@@ -154,6 +154,8 @@ func main() {
 		level.Error(coordinator.logger).Log("msg", "-proxy-url flag must be specified.")
 		os.Exit(1)
 	}
+	// Make sure proxyURL ends with a single '/'
+	*proxyURL = strings.TrimRight(*proxyURL, "/") + "/"
 	level.Info(coordinator.logger).Log("msg", "URL and FQDN info", "proxy_url", *proxyURL, "Using FQDN of", *myFqdn)
 
 	tlsConfig := &tls.Config{}
