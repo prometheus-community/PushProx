@@ -156,7 +156,7 @@ func main() {
 	}
 	// Make sure proxyURL ends with a single '/'
 	*proxyURL = strings.TrimRight(*proxyURL, "/") + "/"
-	level.Info(coordinator.logger).Log("msg", "URL and FQDN info", "proxy_url", *proxyURL, "Using FQDN of", *myFqdn)
+	level.Info(coordinator.logger).Log("msg", "URL and FQDN info", "proxy_url", *proxyURL, "fqdn", *myFqdn)
 
 	tlsConfig := &tls.Config{}
 	if *tlsCert != "" {
