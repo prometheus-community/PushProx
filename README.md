@@ -54,11 +54,19 @@ file\_sd\_configs can read and then then relabel as needed.
 
 ## How It Works
 
-The client registers with the proxy, and awaits instructions.
+![Sequence diagram](./docs/sequence.svg)
 
-When Prometheus performs a scrape via the proxy, the proxy finds
-the relevant client and tells it what to scrape. The client performs the scrape,
-sends it back to the proxy which passes it back to Prometheus.
+Clients perform scrapes in a network environment that's not directly accessible by Prometheus. 
+The Proxy is accessible by both the Clients and Prometheus.
+Each client is identified by its fqdn.
+
+For example, the following sequence is performed when Prometheus scrapes target `fqdn-x` via PushProx.
+First, a Client polls the Proxy for scrape requests, and includes its fqdn in the poll (1). 
+The Proxy does not respond yet.
+Next, Prometheus tries to scrape the target with hostname `fqdn-x` via the Proxy (2).
+Using the fqdn received in (1), the Proxy now routes the scrape to the correct Client: the scrape request is in the response body of the poll (3).
+This scrape request is executed by the client (4), the response containing metrics (5) is posted to the Proxy (6). 
+On its turn, the Proxy returns this to Prometheus (7) as a reponse to the initial scrape of (2).
 
 ## Security
 
