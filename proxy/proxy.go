@@ -22,7 +22,7 @@ import (
 )
 
 var (
-	listenAddress = kingpin.Flag("web.listen-address", "Address to listen on for proxy and client requests.").Default(":8080").String()
+	listenAddress = kingpin.Flag("web.listen-address", "Address to listen on for proxy and client requests.").Envar("WEB_LISTEN_ADDRESS").Default(":8080").String()
 )
 
 func copyHTTPResponse(resp *http.Response, w http.ResponseWriter) {
