@@ -9,12 +9,12 @@ import (
 	"io"
 	"io/ioutil"
 	"net/http"
+	"os"
 	"strings"
 
 	kingpin "gopkg.in/alecthomas/kingpin.v2"
 
 	"github.com/go-kit/kit/log/level"
-	"github.com/prometheus/common/log"
 	"github.com/prometheus/common/promlog"
 	"github.com/prometheus/common/promlog/flag"
 
@@ -107,5 +107,8 @@ func main() {
 	})
 
 	level.Info(logger).Log("msg", "Listening", "address", *listenAddress)
-	log.Fatal(http.ListenAndServe(*listenAddress, nil))
+	if err := http.ListenAndServe(*listenAddress, nil); err != nil {
+		level.Error(logger).Log("msg", "Listening failed", "err", err)
+		os.Exit(1)
+	}
 }
