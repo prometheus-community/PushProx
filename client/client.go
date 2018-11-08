@@ -179,7 +179,10 @@ func main() {
 			os.Exit(1)
 		}
 		caCertPool := x509.NewCertPool()
-		caCertPool.AppendCertsFromPEM(caCert)
+		if ok := caCertPool.AppendCertsFromPEM(caCert); !ok {
+			level.Error(coordinator.logger).Log("msg", "Failed to use cacert file as ca certificate")
+			os.Exit(1)
+		}
 
 		tlsConfig.RootCAs = caCertPool
 	}
