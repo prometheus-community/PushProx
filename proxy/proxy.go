@@ -82,9 +82,14 @@ func main() {
 		if r.URL.Path == "/push" {
 			buf := &bytes.Buffer{}
 			io.Copy(buf, r.Body)
-			scrapeResult, _ := http.ReadResponse(bufio.NewReader(buf), nil)
+			scrapeResult, err := http.ReadResponse(bufio.NewReader(buf), nil)
+			if err != nil {
+				level.Error(logger).Log("msg", "Error reading pushed response:", "err", err)
+				http.Error(w, fmt.Sprintf("Error pushing: %s", err.Error()), 500)
+				return
+			}
 			level.Info(logger).Log("msg", "Got /push", "scrape_id", scrapeResult.Header.Get("Id"))
-			err := coordinator.ScrapeResult(scrapeResult)
+			err = coordinator.ScrapeResult(scrapeResult)
 			if err != nil {
 				level.Error(logger).Log("msg", "Error pushing:", "err", err, "scrape_id", scrapeResult.Header.Get("Id"))
 				http.Error(w, fmt.Sprintf("Error pushing: %s", err.Error()), 500)
