@@ -16,6 +16,8 @@ import (
 
 	"github.com/go-kit/kit/log"
 	"github.com/go-kit/kit/log/level"
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/prometheus/common/promlog"
 	"github.com/prometheus/common/promlog/flag"
 
@@ -25,6 +27,28 @@ import (
 var (
 	listenAddress = kingpin.Flag("web.listen-address", "Address to listen on for proxy and client requests.").Default(":8080").String()
 )
+
+var (
+	httpAPICounter = prometheus.NewCounterVec(
+		prometheus.CounterOpts{
+			Name: "pushprox_http_requests_total",
+			Help: "Number of http api requests.",
+		},
+		[]string{"code", "path"},
+	)
+
+	httpProxyCounter = prometheus.NewCounterVec(
+		prometheus.CounterOpts{
+			Name: "pushproxy_proxied_requests_total",
+			Help: "Number of http proxy requests.",
+		},
+		[]string{"code"},
+	)
+)
+
+func init() {
+	prometheus.MustRegister(httpAPICounter, httpProxyCounter)
+}
 
 func copyHTTPResponse(resp *http.Response, w http.ResponseWriter) {
 	for k, v := range resp.Header {
@@ -48,10 +72,28 @@ type httpHandler struct {
 
 func newHTTPHandler(logger log.Logger, coordinator *Coordinator, mux *http.ServeMux) *httpHandler {
 	h := &httpHandler{logger: logger, coordinator: coordinator, mux: mux}
-	mux.Handle("/clients", http.HandlerFunc(h.handleListClients))
-	mux.Handle("/push", http.HandlerFunc(h.handlePush))
-	mux.Handle("/poll", http.HandlerFunc(h.handlePoll))
-	h.proxy = http.HandlerFunc(h.handleProxy)
+
+	// api handlers
+	handlers := map[string]http.HandlerFunc{
+		"/push":    h.handlePush,
+		"/poll":    h.handlePoll,
+		"/clients": h.handleListClients,
+	}
+	for path, handlerFunc := range handlers {
+		counter := httpAPICounter.MustCurryWith(prometheus.Labels{"path": path})
+		mux.Handle(path, promhttp.InstrumentHandlerCounter(counter, http.HandlerFunc(handlerFunc)))
+		counter.WithLabelValues("200")
+		if path == "/push" {
+			counter.WithLabelValues("500")
+		}
+		if path == "/poll" {
+			counter.WithLabelValues("408")
+		}
+	}
+
+	// proxy handler
+	h.proxy = promhttp.InstrumentHandlerCounter(httpProxyCounter, http.HandlerFunc(h.handleProxy))
+
 	return h
 }
 
@@ -130,7 +172,9 @@ func main() {
 	logger := promlog.New(allowedLevel)
 	coordinator := NewCoordinator(logger)
 
-	handler := newHTTPHandler(logger, coordinator, http.NewServeMux())
+	mux := http.NewServeMux()
+	mux.Handle("/metrics", promhttp.Handler())
+	handler := newHTTPHandler(logger, coordinator, mux)
 
 	level.Info(logger).Log("msg", "Listening", "address", *listenAddress)
 	if err := http.ListenAndServe(*listenAddress, handler); err != nil {
