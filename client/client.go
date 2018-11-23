@@ -20,18 +20,46 @@ import (
 	"github.com/ShowMax/go-fqdn"
 	"github.com/go-kit/kit/log"
 	"github.com/go-kit/kit/log/level"
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/prometheus/common/promlog"
 	"github.com/prometheus/common/promlog/flag"
 	"github.com/robustperception/pushprox/util"
 )
 
 var (
-	myFqdn     = kingpin.Flag("fqdn", "FQDN to register with").Default(fqdn.Get()).String()
-	proxyURL   = kingpin.Flag("proxy-url", "Push proxy to talk to.").Required().String()
-	caCertFile = kingpin.Flag("tls.cacert", "<file> CA certificate to verify peer against").String()
-	tlsCert    = kingpin.Flag("tls.cert", "<cert> Client certificate file").String()
-	tlsKey     = kingpin.Flag("tls.key", "<key> Private key file").String()
+	myFqdn      = kingpin.Flag("fqdn", "FQDN to register with").Default(fqdn.Get()).String()
+	proxyURL    = kingpin.Flag("proxy-url", "Push proxy to talk to.").Required().String()
+	caCertFile  = kingpin.Flag("tls.cacert", "<file> CA certificate to verify peer against").String()
+	tlsCert     = kingpin.Flag("tls.cert", "<cert> Client certificate file").String()
+	tlsKey      = kingpin.Flag("tls.key", "<key> Private key file").String()
+	metricsAddr = kingpin.Flag("metrics-addr", "Serve Prometheus metrics at this address").Default(":9369").String()
 )
+
+var (
+	scrapeErrorCounter = prometheus.NewCounter(
+		prometheus.CounterOpts{
+			Name: "pushprox_client_scrape_errors_total",
+			Help: "Number of scrape errors",
+		},
+	)
+	pushErrorCounter = prometheus.NewCounter(
+		prometheus.CounterOpts{
+			Name: "pushprox_client_push_errors_total",
+			Help: "Number of push errors",
+		},
+	)
+	pollErrorCounter = prometheus.NewCounter(
+		prometheus.CounterOpts{
+			Name: "pushprox_client_poll_errors_total",
+			Help: "Number of poll errors",
+		},
+	)
+)
+
+func init() {
+	prometheus.MustRegister(pushErrorCounter, pollErrorCounter, scrapeErrorCounter)
+}
 
 type Coordinator struct {
 	logger log.Logger
@@ -54,6 +82,7 @@ func (c *Coordinator) doScrape(request *http.Request, client *http.Client) {
 	if err != nil {
 		msg := fmt.Sprintf("Failed to scrape %s: %s", request.URL.String(), err)
 		level.Warn(logger).Log("msg", "Failed to scrape", "Request URL", request.URL.String(), "err", err)
+		scrapeErrorCounter.Inc()
 		resp := &http.Response{
 			StatusCode: 500,
 			Header:     http.Header{},
@@ -61,6 +90,7 @@ func (c *Coordinator) doScrape(request *http.Request, client *http.Client) {
 		}
 		err = c.doPush(resp, request, client)
 		if err != nil {
+			pushErrorCounter.Inc()
 			level.Warn(logger).Log("msg", "Failed to push failed scrape response:", "err", err)
 			return
 		}
@@ -70,6 +100,7 @@ func (c *Coordinator) doScrape(request *http.Request, client *http.Client) {
 	level.Info(logger).Log("msg", "Retrieved scrape response")
 	err = c.doPush(scrapeResp, request, client)
 	if err != nil {
+		pushErrorCounter.Inc()
 		level.Warn(logger).Log("msg", "Failed to push scrape response:", "err", err)
 		return
 	}
@@ -187,11 +218,20 @@ func main() {
 		tlsConfig.RootCAs = caCertPool
 	}
 
+	if *metricsAddr != "" {
+		go func() {
+			if err := http.ListenAndServe(*metricsAddr, promhttp.Handler()); err != nil {
+				level.Warn(coordinator.logger).Log("msg", "ListenAndServe", "err", err)
+			}
+		}()
+	}
+
 	transport := &http.Transport{TLSClientConfig: tlsConfig}
 
 	for {
 		err := loop(coordinator, transport)
 		if err != nil {
+			pollErrorCounter.Inc()
 			time.Sleep(time.Second) // Don't pound the server. TODO: Randomised exponential backoff.
 		}
 	}
