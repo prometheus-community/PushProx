@@ -182,7 +182,7 @@ func main() {
 	logger := promlog.New(allowedLevel)
 	coordinator := Coordinator{logger: logger}
 	if *proxyURL == "" {
-		level.Error(coordinator.logger).Log("msg", "-proxy-url flag must be specified.")
+		level.Error(coordinator.logger).Log("msg", "--proxy-url flag must be specified.")
 		os.Exit(1)
 	}
 	// Make sure proxyURL ends with a single '/'
