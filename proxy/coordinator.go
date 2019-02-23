@@ -13,8 +13,7 @@ import (
 
 	"github.com/go-kit/kit/log"
 	"github.com/go-kit/kit/log/level"
-	// "github.com/robustperception/pushprox/util"
-	"github.com/snarlysodboxer/PushProx/util"
+	"github.com/robustperception/pushprox/util"
 )
 
 var (
