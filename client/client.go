@@ -24,7 +24,9 @@ import (
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/prometheus/common/promlog"
 	"github.com/prometheus/common/promlog/flag"
-	"github.com/robustperception/pushprox/util"
+	// TODO
+	// "github.com/robustperception/pushprox/util"
+	"github.com/snarlysodboxer/PushProx/util"
 )
 
 var (
@@ -34,6 +36,7 @@ var (
 	tlsCert     = kingpin.Flag("tls.cert", "<cert> Client certificate file").String()
 	tlsKey      = kingpin.Flag("tls.key", "<key> Private key file").String()
 	metricsAddr = kingpin.Flag("metrics-addr", "Serve Prometheus metrics at this address").Default(":9369").String()
+	overrideURL = kingpin.Flag("override-url", "<URL> Force the URL to scrape").String()
 )
 
 var (
@@ -72,6 +75,16 @@ func (c *Coordinator) doScrape(request *http.Request, client *http.Client) {
 	// We cannot handle https requests at the proxy, as we would only
 	// see a CONNECT, so use a URL parameter to trigger it.
 	params := request.URL.Query()
+
+	// Force GET verb
+	request.Method = "GET"
+
+	// Override
+	if err := util.OverrideURLIfDesired(overrideURL, request); err != nil {
+		level.Error(logger).Log("msg", "Failed to parse overrideURL:", "err", err)
+		return
+	}
+
 	if params.Get("_scheme") == "https" {
 		request.URL.Scheme = "https"
 		params.Del("_scheme")
