@@ -74,4 +74,8 @@ There is no authentication or authorisation included, a reverse proxy can be
 put in front though to add these.
 
 Running the client allows those with access to the proxy or the client to access
-all network services on the machine hosting the client.
+all network services on the machine hosting the client, unless you specify the
+`--override-url` setting.
+```
+./client --proxy-url=http://proxy:8080/ --override-url=http://client:9100/metrics
+```
