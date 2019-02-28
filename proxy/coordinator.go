@@ -90,7 +90,7 @@ func (c *Coordinator) DoScrape(ctx context.Context, r *http.Request) (*http.Resp
 	r.Header.Add("Id", id)
 	select {
 	case <-ctx.Done():
-		return nil, fmt.Errorf("Matching client not found for %q: %s", r.URL.String(), ctx.Err())
+		return nil, fmt.Errorf("Timeout reached for %q: %s", r.URL.String(), ctx.Err())
 	case c.getRequestChannel(r.URL.Hostname()) <- r:
 	}
 
@@ -140,7 +140,7 @@ func (c *Coordinator) WaitForScrapeInstruction(fqdn string) (*http.Request, erro
 func (c *Coordinator) ScrapeResult(r *http.Response) error {
 	id := r.Header.Get("Id")
 	level.Info(c.logger).Log("msg", "ScrapeResult", "scrape_id", id)
-	ctx, _ := context.WithTimeout(context.Background(), util.GetScrapeTimeout(r.Header))
+	ctx, _ := context.WithTimeout(context.Background(), util.GetScrapeTimeout(maxScrapeTimeout, defaultScrapeTimeout, r.Header))
 	// Don't expose internal headers.
 	r.Header.Del("Id")
 	r.Header.Del("X-Prometheus-Scrape-Timeout-Seconds")
