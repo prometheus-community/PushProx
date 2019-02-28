@@ -68,7 +68,8 @@ type Coordinator struct {
 
 func (c *Coordinator) doScrape(request *http.Request, client *http.Client) {
 	logger := log.With(c.logger, "scrape_id", request.Header.Get("id"))
-	ctx, _ := context.WithTimeout(request.Context(), util.GetScrapeTimeout(request.Header))
+	timeout, _ := util.GetTimeoutHeader(request.Header)
+	ctx, _ := context.WithTimeout(request.Context(), timeout)
 	request = request.WithContext(ctx)
 	// We cannot handle https requests at the proxy, as we would only
 	// see a CONNECT, so use a URL parameter to trigger it.
