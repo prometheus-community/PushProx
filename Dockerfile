@@ -22,5 +22,5 @@ COPY --from=builder /go/src/github.com/robustperception/pushprox/proxy /app
 COPY --from=builder /go/src/github.com/robustperception/pushprox/client /app
 
 # default startup is the proxy. 
-# Can be overwridden with the docker --entrypoint flag, or the command field in kubernetes container v1 API
+# Can be overridden with the docker --entrypoint flag, or the command field in Kubernetes container v1 API
 ENTRYPOINT ["/app/proxy"]
