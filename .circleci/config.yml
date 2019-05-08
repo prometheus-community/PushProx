@@ -1,34 +1,34 @@
-version: 2
+---
+version: 2.1
+
+executors:
+  golang:
+    docker:
+    - image: circleci/golang:1.12
+
 jobs:
   build:
-    docker:
-      - image: circleci/golang:1.9
-    working_directory: /go/src/github.com/robustperception/pushprox
+    executor: golang
     steps:
       - checkout
+      - run: mkdir build
       - run:
           name: Build proxy
-          command: |
-              cd /go/src/github.com/robustperception/pushprox/proxy
-              go get
-              go build
+          command: go build -mod=vendor -o build/proxy ./proxy
       - run:
           name: Build client
-          command: |
-              cd /go/src/github.com/robustperception/pushprox/client
-              go get
-              go build
+          command: go build -mod=vendor -o build/client ./client
       - run:
           name: Download and untar node_exporter
           command: |
-              wget https://github.com/prometheus/node_exporter/releases/download/v0.15.1/node_exporter-0.15.1.linux-amd64.tar.gz
-              tar xzf node_exporter-0.15.1.linux-amd64.tar.gz
+              wget https://github.com/prometheus/node_exporter/releases/download/v0.17.0/node_exporter-0.17.0.linux-amd64.tar.gz
+              tar xzf node_exporter-0.17.0.linux-amd64.tar.gz
       - run:
           name: Download, untar, and configure Prometheus
           command: |
-              wget https://github.com/prometheus/prometheus/releases/download/v2.0.0/prometheus-2.0.0.linux-amd64.tar.gz
-              tar xzf prometheus-2.0.0.linux-amd64.tar.gz
-              cd prometheus-2.0.0.linux-amd64
+              wget https://github.com/prometheus/prometheus/releases/download/v2.9.1/prometheus-2.9.1.linux-amd64.tar.gz
+              tar xzf prometheus-2.9.1.linux-amd64.tar.gz
+              cd prometheus-2.9.1.linux-amd64
               rm prometheus.yml
               cat << EOF > prometheus.yml
               global:
@@ -42,12 +42,61 @@ jobs:
       - run:
           name: Run everything and test that Prometheus can scrape node_exporter via pushprox
           command: |
-              ./node_exporter-0.15.1.linux-amd64/node_exporter &
-              ./proxy/proxy &
-              ./client/client --proxy-url=http://127.0.0.1:8080 &
-              ./prometheus-2.0.0.linux-amd64/prometheus --config.file=prometheus-2.0.0.linux-amd64/prometheus.yml  &
+              ./node_exporter-0.17.0.linux-amd64/node_exporter &
+              ./build/proxy &
+              ./build/client --proxy-url=http://127.0.0.1:8080 &
+              ./prometheus-2.9.1.linux-amd64/prometheus --config.file=prometheus-2.9.1.linux-amd64/prometheus.yml  &
               sleep 5
               res=`curl -g http://localhost:9090/api/v1/query?query=node_cpu | jq '.data.result | length'`
               if [ $res == 0 ]; then
                   exit 1
               fi
+      - persist_to_workspace:
+          root: .
+          paths:
+          - build
+      - store_artifacts:
+          path: build
+
+  release:
+    docker:
+    - image: circleci/golang:1.11
+    executor: golang
+    steps:
+    - checkout
+    - run: sudo apt-get update
+    - run: sudo apt-get -y install fakeroot
+    - run: mkdir -v -p ${HOME}/bin
+    - run: curl -L 'https://github.com/aktau/github-release/releases/download/v0.7.2/linux-amd64-github-release.tar.bz2' | tar xvjf - --strip-components 3 -C ${HOME}/bin
+    - attach_workspace:
+        at: .
+    - run: mkdir "pushprox-${CIRCLE_TAG}"
+    - run: cp build/{client,proyy} "pushprox-${CIRCLE_TAG}/"
+    - run: fakeroot tar -czvf pushprox-${CIRCLE_TAG}.amd64.tar.gz "pushprox-${CIRCLE_TAG}"
+    - run: sha256sum pushprox-*.tar.gz | tee sha256sums.txt
+    - run: >
+        for file in pushprox-*.tar.gz sha256sums.txt ; do
+          ${HOME}/bin/github-release upload \
+            --user "${CIRCLE_PROJECT_USERNAME}" \
+            --repo "${CIRCLE_PROJECT_REPONAME}" \
+            --tag "${CIRCLE_TAG}" \
+            --name "${file}" \
+            --file "${file}"
+        done
+
+workflows:
+  version: 2
+  stuff:
+    jobs:
+    - build:
+        filters:
+          tags:
+            only: /.*/
+    - release:
+        requires:
+        - build
+        filters:
+          tags:
+            only: /^v.*/
+          branches:
+            ignore: /.*/
