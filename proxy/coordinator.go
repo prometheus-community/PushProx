@@ -13,11 +13,24 @@ import (
 
 	"github.com/go-kit/kit/log"
 	"github.com/go-kit/kit/log/level"
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/promauto"
 	"github.com/robustperception/pushprox/util"
 )
 
 var (
 	registrationTimeout = kingpin.Flag("registration.timeout", "After how long a registration expires.").Default("5m").Duration()
+)
+
+// Coordinator metrics.
+var (
+	knownClients = promauto.NewGauge(
+		prometheus.GaugeOpts{
+			Namespace: namespace,
+			Name: "clients",
+			Help: "Number of known pushprox clients.",
+		},
+	)
 )
 
 type Coordinator struct {
@@ -158,6 +171,7 @@ func (c *Coordinator) addKnownClient(fqdn string) {
 	defer c.mu.Unlock()
 
 	c.known[fqdn] = time.Now()
+	knownClients.Set(float64(len(c.known)))
 }
 
 // What clients are alive.
@@ -190,6 +204,7 @@ func (c *Coordinator) gc() {
 				}
 			}
 			level.Info(c.logger).Log("msg", "GC of clients completed", "deleted", deleted, "remaining", len(c.known))
+			knownClients.Set(float64(len(c.known)))
 		}()
 	}
 }
