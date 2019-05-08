@@ -167,11 +167,11 @@ func (h *httpHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 }
 
 func main() {
-	allowedLevel := promlog.AllowedLevel{}
-	flag.AddFlags(kingpin.CommandLine, &allowedLevel)
+	promlogConfig := promlog.Config{}
+	flag.AddFlags(kingpin.CommandLine, &promlogConfig)
 	kingpin.HelpFlag.Short('h')
 	kingpin.Parse()
-	logger := promlog.New(allowedLevel)
+	logger := promlog.New(&promlogConfig)
 	coordinator := NewCoordinator(logger)
 
 	mux := http.NewServeMux()

@@ -177,11 +177,11 @@ func loop(c Coordinator, t *http.Transport) error {
 }
 
 func main() {
-	allowedLevel := promlog.AllowedLevel{}
-	flag.AddFlags(kingpin.CommandLine, &allowedLevel)
+	promlogConfig := promlog.Config{}
+	flag.AddFlags(kingpin.CommandLine, &promlogConfig)
 	kingpin.HelpFlag.Short('h')
 	kingpin.Parse()
-	logger := promlog.New(allowedLevel)
+	logger := promlog.New(&promlogConfig)
 	coordinator := Coordinator{logger: logger}
 	if *proxyURL == "" {
 		level.Error(coordinator.logger).Log("msg", "--proxy-url flag must be specified.")
