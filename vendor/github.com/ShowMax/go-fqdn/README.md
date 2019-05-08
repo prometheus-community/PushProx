@@ -4,7 +4,7 @@ Simple wrapper around `net` and `os` golang standard libraries providing Fully Q
 ## Usage
 Get the library...
 ```
-$ go get github.com/ShowMax/go-fqdn
+$ go get github.com/Showmax/go-fqdn
 ```
 ...and write some code.
 ```
@@ -12,7 +12,7 @@ package main
 
 import (
 	"fmt"
-	"github.com/ShowMax/go-fqdn"
+	"github.com/Showmax/go-fqdn"
 )
 
 func main() {
