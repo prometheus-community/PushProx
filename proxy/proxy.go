@@ -24,6 +24,10 @@ import (
 	"github.com/robustperception/pushprox/util"
 )
 
+const (
+	namespace = "pushprox_proxy" // For Prometheus metrics.
+)
+
 var (
 	listenAddress        = kingpin.Flag("web.listen-address", "Address to listen on for proxy and client requests.").Default(":8080").String()
 	maxScrapeTimeout     = kingpin.Flag("scrape.max-timeout", "Any scrape with a timeout higher than this will have to be clamped to this.").Default("5m").Duration()
