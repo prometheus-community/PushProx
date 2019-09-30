@@ -1,9 +1,9 @@
 # github.com/ShowMax/go-fqdn v0.0.0-20180501083314-6f60894d629f
 github.com/ShowMax/go-fqdn
-# github.com/alecthomas/template v0.0.0-20160405071501-a0175ee3bccc
+# github.com/alecthomas/template v0.0.0-20190718012654-fb15b899a751
 github.com/alecthomas/template
 github.com/alecthomas/template/parse
-# github.com/alecthomas/units v0.0.0-20151022065526-2efee857e7cf
+# github.com/alecthomas/units v0.0.0-20190910110746-680d30ca3117
 github.com/alecthomas/units
 # github.com/beorn7/perks v1.0.0
 github.com/beorn7/perks/quantile

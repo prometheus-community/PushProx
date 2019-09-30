@@ -9,6 +9,8 @@ import (
 	"errors"
 	"fmt"
 	"io/ioutil"
+	"math"
+	"math/rand"
 	"net"
 	"net/http"
 	"net/url"
@@ -176,6 +178,30 @@ func loop(c Coordinator, t *http.Transport) error {
 	return nil
 }
 
+// decorrelated Jitter increases the maximum jitter based on the last random value.
+type decorrelatedJitter struct {
+	duration float64 // sleep time
+	min      float64 // min sleep time
+	cap      float64 // max sleep time
+}
+
+func newJitter() decorrelatedJitter {
+	rand.Seed(time.Now().UnixNano())
+	return decorrelatedJitter{
+		duration: 1,
+		min:      1,
+		cap:      10,
+	}
+}
+
+func (d *decorrelatedJitter) calc() {
+	d.duration = math.Min(d.cap, d.min+rand.Float64()*(d.duration*3-d.min))
+}
+
+func (d *decorrelatedJitter) sleep() {
+	time.Sleep(time.Duration(d.duration))
+}
+
 func main() {
 	promlogConfig := promlog.Config{}
 	flag.AddFlags(kingpin.CommandLine, &promlogConfig)
@@ -239,14 +265,16 @@ func main() {
 		IdleConnTimeout:       90 * time.Second,
 		TLSHandshakeTimeout:   10 * time.Second,
 		ExpectContinueTimeout: 1 * time.Second,
-		TLSClientConfig: tlsConfig,
+		TLSClientConfig:       tlsConfig,
 	}
 
+	jitter := newJitter()
 	for {
 		err := loop(coordinator, transport)
 		if err != nil {
 			pollErrorCounter.Inc()
-			time.Sleep(time.Second) // Don't pound the server. TODO: Randomised exponential backoff.
+			jitter.sleep()
+			continue
 		}
 	}
 }
