@@ -2,10 +2,7 @@ package main
 
 import (
 	"context"
-	"crypto/hmac"
 	"crypto/rand"
-	"crypto/sha256"
-	"errors"
 	"fmt"
 	"net/http"
 	"sync"
@@ -70,16 +67,6 @@ func NewCoordinator(logger log.Logger) (*Coordinator, error) {
 	return c, nil
 }
 
-func (c *Coordinator) signHMAC(id string) string {
-	mac := hmac.New(sha256.New, c.signKey)
-	return fmt.Sprintf("%x", mac.Sum([]byte(id)))
-}
-
-func (c *Coordinator) verifyHMAC(msg, signature string) bool {
-	signed := c.signHMAC(msg)
-	return hmac.Equal([]byte(signed), []byte(signature))
-}
-
 // Generate a unique ID
 func (c *Coordinator) genID() (string, error) {
 	id, err := uuid.NewRandom()
@@ -122,9 +109,7 @@ func (c *Coordinator) DoScrape(ctx context.Context, r *http.Request) (*http.Resp
 		return nil, err
 	}
 	level.Info(c.logger).Log("msg", "DoScrape", "scrape_id", id, "url", r.URL.String())
-	idSignature := c.signHMAC(id)
 	r.Header.Add("Id", id)
-	r.Header.Add("Signature", idSignature)
 	select {
 	case <-ctx.Done():
 		return nil, fmt.Errorf("Timeout reached for %q: %s", r.URL.String(), ctx.Err())
@@ -176,16 +161,11 @@ func (c *Coordinator) WaitForScrapeInstruction(fqdn string) (*http.Request, erro
 // ScrapeResult send by client
 func (c *Coordinator) ScrapeResult(r *http.Response) error {
 	id := r.Header.Get("Id")
-	signature := r.Header.Get("Signature")
-	if !c.verifyHMAC(id, signature) {
-		return errors.New("id signature did not match")
-	}
 	level.Info(c.logger).Log("msg", "ScrapeResult", "scrape_id", id)
 	ctx, cancel := context.WithTimeout(context.Background(), util.GetScrapeTimeout(maxScrapeTimeout, defaultScrapeTimeout, r.Header))
 	defer cancel()
 	// Don't expose internal headers.
 	r.Header.Del("Id")
-	r.Header.Del("Signature")
 	r.Header.Del("X-Prometheus-Scrape-Timeout-Seconds")
 	select {
 	case c.getResponseChannel(id) <- r:
