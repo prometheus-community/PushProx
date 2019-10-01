@@ -39,21 +39,24 @@ var (
 		prometheus.CounterOpts{
 			Name: "pushprox_http_requests_total",
 			Help: "Number of http api requests.",
-		},
-		[]string{"code", "path"},
+		}, []string{"code", "path"},
 	)
 
 	httpProxyCounter = prometheus.NewCounterVec(
 		prometheus.CounterOpts{
 			Name: "pushproxy_proxied_requests_total",
 			Help: "Number of http proxy requests.",
-		},
-		[]string{"code"},
+		}, []string{"code"},
 	)
+	httpPathHistogram = prometheus.NewHistogramVec(
+		prometheus.HistogramOpts{
+			Name: "pushprox_http_path_duration",
+			Help: "Time taken by path",
+		}, []string{"path"})
 )
 
 func init() {
-	prometheus.MustRegister(httpAPICounter, httpProxyCounter)
+	prometheus.MustRegister(httpAPICounter, httpProxyCounter, httpPathHistogram)
 }
 
 func copyHTTPResponse(resp *http.Response, w http.ResponseWriter) {
@@ -84,10 +87,14 @@ func newHTTPHandler(logger log.Logger, coordinator *Coordinator, mux *http.Serve
 		"/push":    h.handlePush,
 		"/poll":    h.handlePoll,
 		"/clients": h.handleListClients,
+		"/metrics": promhttp.Handler().ServeHTTP,
 	}
 	for path, handlerFunc := range handlers {
 		counter := httpAPICounter.MustCurryWith(prometheus.Labels{"path": path})
-		mux.Handle(path, promhttp.InstrumentHandlerCounter(counter, http.HandlerFunc(handlerFunc)))
+		handler := promhttp.InstrumentHandlerCounter(counter, http.HandlerFunc(handlerFunc))
+		histogram := httpPathHistogram.MustCurryWith(prometheus.Labels{"path": path})
+		handler = promhttp.InstrumentHandlerDuration(histogram, handler)
+		mux.Handle(path, handler)
 		counter.WithLabelValues("200")
 		if path == "/push" {
 			counter.WithLabelValues("500")
@@ -179,7 +186,6 @@ func main() {
 	coordinator := NewCoordinator(logger)
 
 	mux := http.NewServeMux()
-	mux.Handle("/metrics", promhttp.Handler())
 	handler := newHTTPHandler(logger, coordinator, mux)
 
 	level.Info(logger).Log("msg", "Listening", "address", *listenAddress)
