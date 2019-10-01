@@ -37,6 +37,7 @@ var (
 	tlsCert     = kingpin.Flag("tls.cert", "<cert> Client certificate file").String()
 	tlsKey      = kingpin.Flag("tls.key", "<key> Private key file").String()
 	metricsAddr = kingpin.Flag("metrics-addr", "Serve Prometheus metrics at this address").Default(":9369").String()
+	strictMode  = kingpin.Flag("strict-mode", "Set to force HTTP verb and target to be FQDN").Bool()
 )
 
 var (
@@ -68,6 +69,14 @@ type Coordinator struct {
 	logger log.Logger
 }
 
+func enforceStrict(request *http.Request) {
+	request.Method = "GET"
+	hostname := request.URL.Hostname()
+	if hostname != *myFqdn {
+		request.URL.Host = strings.Replace(request.URL.Host, hostname, *myFqdn, -1)
+	}
+}
+
 func (c *Coordinator) doScrape(request *http.Request, client *http.Client) {
 	logger := log.With(c.logger, "scrape_id", request.Header.Get("id"))
 	timeout, _ := util.GetHeaderTimeout(request.Header)
@@ -80,6 +89,10 @@ func (c *Coordinator) doScrape(request *http.Request, client *http.Client) {
 		request.URL.Scheme = "https"
 		params.Del("_scheme")
 		request.URL.RawQuery = params.Encode()
+	}
+
+	if *strictMode {
+		enforceStrict(request)
 	}
 
 	scrapeResp, err := client.Do(request)
