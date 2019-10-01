@@ -6,7 +6,6 @@ import (
 	"context"
 	"crypto/tls"
 	"crypto/x509"
-	"errors"
 	"fmt"
 	"io/ioutil"
 	"math"
@@ -23,6 +22,7 @@ import (
 	"github.com/ShowMax/go-fqdn"
 	"github.com/go-kit/kit/log"
 	"github.com/go-kit/kit/log/level"
+	"github.com/pkg/errors"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/prometheus/common/promlog"
@@ -69,17 +69,29 @@ type Coordinator struct {
 	logger log.Logger
 }
 
-func enforceStrict(request *http.Request) {
-	request.Method = "GET"
-	hostname := request.URL.Hostname()
-	if hostname != *myFqdn {
-		request.URL.Host = strings.Replace(request.URL.Host, hostname, *myFqdn, -1)
+func (c *Coordinator) handleErr(request *http.Request, client *http.Client, err error) {
+	level.Error(c.logger).Log("err", err)
+	scrapeErrorCounter.Inc()
+	resp := &http.Response{
+		StatusCode: http.StatusInternalServerError,
+		Body:       ioutil.NopCloser(strings.NewReader(err.Error())),
+		Header:     http.Header{},
 	}
+	if err = c.doPush(resp, request, client); err != nil {
+		pushErrorCounter.Inc()
+		level.Warn(c.logger).Log("msg", "Failed to push failed scrape response:", "err", err)
+		return
+	}
+	level.Info(c.logger).Log("msg", "Pushed failed scrape response")
 }
 
 func (c *Coordinator) doScrape(request *http.Request, client *http.Client) {
 	logger := log.With(c.logger, "scrape_id", request.Header.Get("id"))
-	timeout, _ := util.GetHeaderTimeout(request.Header)
+	timeout, err := util.GetHeaderTimeout(request.Header)
+	if err != nil {
+		c.handleErr(request, client, err)
+		return
+	}
 	ctx, _ := context.WithTimeout(request.Context(), timeout)
 	request = request.WithContext(ctx)
 	// We cannot handle https requests at the proxy, as we would only
@@ -92,31 +104,25 @@ func (c *Coordinator) doScrape(request *http.Request, client *http.Client) {
 	}
 
 	if *strictMode {
-		enforceStrict(request)
+		fqdnURL, err := url.Parse(*myFqdn)
+		if err != nil {
+			c.handleErr(request, client, err)
+			return
+		}
+		if request.URL.Hostname() != fqdnURL.Hostname() {
+			c.handleErr(request, client, errors.New("scrape target doesn't match client fqdn"))
+			return
+		}
 	}
 
 	scrapeResp, err := client.Do(request)
 	if err != nil {
-		msg := fmt.Sprintf("Failed to scrape %s: %s", request.URL.String(), err)
-		level.Warn(logger).Log("msg", "Failed to scrape", "Request URL", request.URL.String(), "err", err)
-		scrapeErrorCounter.Inc()
-		resp := &http.Response{
-			StatusCode: 500,
-			Header:     http.Header{},
-			Body:       ioutil.NopCloser(strings.NewReader(msg)),
-		}
-		err = c.doPush(resp, request, client)
-		if err != nil {
-			pushErrorCounter.Inc()
-			level.Warn(logger).Log("msg", "Failed to push failed scrape response:", "err", err)
-			return
-		}
-		level.Info(logger).Log("msg", "Pushed failed scrape response")
+		msg := fmt.Sprintf("failed to scrape %s", request.URL.String())
+		c.handleErr(request, client, errors.Wrap(err, msg))
 		return
 	}
 	level.Info(logger).Log("msg", "Retrieved scrape response")
-	err = c.doPush(scrapeResp, request, client)
-	if err != nil {
+	if err = c.doPush(scrapeResp, request, client); err != nil {
 		pushErrorCounter.Inc()
 		level.Warn(logger).Log("msg", "Failed to push scrape response:", "err", err)
 		return
@@ -150,37 +156,35 @@ func (c *Coordinator) doPush(resp *http.Response, origRequest *http.Request, cli
 		ContentLength: int64(buf.Len()),
 	}
 	request = request.WithContext(origRequest.Context())
-	_, err = client.Do(request)
-	if err != nil {
+	if _, err = client.Do(request); err != nil {
 		return err
 	}
 	return nil
 }
 
-func loop(c Coordinator, t *http.Transport) error {
-	client := &http.Client{Transport: t}
+func loop(c Coordinator, client *http.Client) error {
 	base, err := url.Parse(*proxyURL)
 	if err != nil {
 		level.Error(c.logger).Log("msg", "Error parsing url:", "err", err)
-		return errors.New("error parsing url")
+		return errors.Wrap(err, "error parsing url")
 	}
 	u, err := url.Parse("poll")
 	if err != nil {
 		level.Error(c.logger).Log("msg", "Error parsing url:", "err", err)
-		return errors.New("error parsing url poll")
+		return errors.Wrap(err, "error parsing url poll")
 	}
 	url := base.ResolveReference(u)
 	resp, err := client.Post(url.String(), "", strings.NewReader(*myFqdn))
 	if err != nil {
 		level.Error(c.logger).Log("msg", "Error polling:", "err", err)
-		return errors.New("error polling")
+		return errors.Wrap(err, "error polling")
 	}
 	defer resp.Body.Close()
 
 	request, err := http.ReadRequest(bufio.NewReader(resp.Body))
 	if err != nil {
 		level.Error(c.logger).Log("msg", "Error reading request:", "err", err)
-		return errors.New("error reading request")
+		return errors.Wrap(err, "error reading request")
 	}
 	level.Info(c.logger).Log("msg", "Got scrape request", "scrape_id", request.Header.Get("id"), "url", request.URL)
 
@@ -282,8 +286,9 @@ func main() {
 	}
 
 	jitter := newJitter()
+	client := &http.Client{Transport: transport}
 	for {
-		err := loop(coordinator, transport)
+		err := loop(coordinator, client)
 		if err != nil {
 			pollErrorCounter.Inc()
 			jitter.sleep()
