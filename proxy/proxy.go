@@ -50,7 +50,7 @@ var (
 	)
 	httpPathHistogram = prometheus.NewHistogramVec(
 		prometheus.HistogramOpts{
-			Name: "pushprox_http_path_duration",
+			Name: "pushprox_http_duration_seconds",
 			Help: "Time taken by path",
 		}, []string{"path"})
 )
