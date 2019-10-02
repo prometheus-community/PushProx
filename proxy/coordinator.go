@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"crypto/rand"
 	"fmt"
 	"net/http"
 	"sync"
@@ -44,8 +43,7 @@ type Coordinator struct {
 	// Clients we know about and when they last contacted us.
 	known map[string]time.Time
 
-	logger  log.Logger
-	signKey []byte
+	logger log.Logger
 }
 
 // NewCoordinator initiates the coordinator and starts the client cleanup routine
@@ -57,12 +55,6 @@ func NewCoordinator(logger log.Logger) (*Coordinator, error) {
 		logger:    logger,
 	}
 
-	// generating a random byte array to sign the request IDs
-	signKey := make([]byte, 12)
-	if _, err := rand.Read(signKey); err != nil {
-		return nil, err
-	}
-	c.signKey = signKey
 	go c.gc()
 	return c, nil
 }
