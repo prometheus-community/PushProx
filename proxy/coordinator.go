@@ -4,15 +4,14 @@ import (
 	"context"
 	"fmt"
 	"net/http"
-	"os"
 	"sync"
-	"sync/atomic"
 	"time"
 
 	kingpin "gopkg.in/alecthomas/kingpin.v2"
 
 	"github.com/go-kit/kit/log"
 	"github.com/go-kit/kit/log/level"
+	"github.com/google/uuid"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promauto"
 	"github.com/robustperception/pushprox/util"
@@ -27,12 +26,13 @@ var (
 	knownClients = promauto.NewGauge(
 		prometheus.GaugeOpts{
 			Namespace: namespace,
-			Name: "clients",
-			Help: "Number of known pushprox clients.",
+			Name:      "clients",
+			Help:      "Number of known pushprox clients.",
 		},
 	)
 )
 
+// Coordinator for scrape requests and responses
 type Coordinator struct {
 	mu sync.Mutex
 
@@ -46,25 +46,23 @@ type Coordinator struct {
 	logger log.Logger
 }
 
-func NewCoordinator(logger log.Logger) *Coordinator {
+// NewCoordinator initiates the coordinator and starts the client cleanup routine
+func NewCoordinator(logger log.Logger) (*Coordinator, error) {
 	c := &Coordinator{
 		waiting:   map[string]chan *http.Request{},
 		responses: map[string]chan *http.Response{},
 		known:     map[string]time.Time{},
 		logger:    logger,
 	}
+
 	go c.gc()
-	return c
+	return c, nil
 }
 
-var idCounter int64
-
 // Generate a unique ID
-func genId() string {
-	id := atomic.AddInt64(&idCounter, 1)
-	// TODO: Add MAC address.
-	// TODO: Sign these to prevent spoofing.
-	return fmt.Sprintf("%d-%d-%d", time.Now().Unix(), id, os.Getpid())
+func (c *Coordinator) genID() (string, error) {
+	id, err := uuid.NewRandom()
+	return id.String(), err
 }
 
 func (c *Coordinator) getRequestChannel(fqdn string) chan *http.Request {
@@ -96,9 +94,12 @@ func (c *Coordinator) removeResponseChannel(id string) {
 	delete(c.responses, id)
 }
 
-// Request a scrape.
+// DoScrape requests a scrape.
 func (c *Coordinator) DoScrape(ctx context.Context, r *http.Request) (*http.Response, error) {
-	id := genId()
+	id, err := c.genID()
+	if err != nil {
+		return nil, err
+	}
 	level.Info(c.logger).Log("msg", "DoScrape", "scrape_id", id, "url", r.URL.String())
 	r.Header.Add("Id", id)
 	select {
@@ -118,7 +119,7 @@ func (c *Coordinator) DoScrape(ctx context.Context, r *http.Request) (*http.Resp
 	}
 }
 
-// Client registering to accept a scrape request. Blocking.
+// WaitForScrapeInstruction registers a client waiting for a scrape result
 func (c *Coordinator) WaitForScrapeInstruction(fqdn string) (*http.Request, error) {
 	level.Info(c.logger).Log("msg", "WaitForScrapeInstruction", "fqdn", fqdn)
 
@@ -149,11 +150,12 @@ func (c *Coordinator) WaitForScrapeInstruction(fqdn string) (*http.Request, erro
 	}
 }
 
-// Client sending a scrape result in.
+// ScrapeResult send by client
 func (c *Coordinator) ScrapeResult(r *http.Response) error {
 	id := r.Header.Get("Id")
 	level.Info(c.logger).Log("msg", "ScrapeResult", "scrape_id", id)
-	ctx, _ := context.WithTimeout(context.Background(), util.GetScrapeTimeout(maxScrapeTimeout, defaultScrapeTimeout, r.Header))
+	ctx, cancel := context.WithTimeout(context.Background(), util.GetScrapeTimeout(maxScrapeTimeout, defaultScrapeTimeout, r.Header))
+	defer cancel()
 	// Don't expose internal headers.
 	r.Header.Del("Id")
 	r.Header.Del("X-Prometheus-Scrape-Timeout-Seconds")
@@ -174,7 +176,7 @@ func (c *Coordinator) addKnownClient(fqdn string) {
 	knownClients.Set(float64(len(c.known)))
 }
 
-// What clients are alive.
+// KnownClients returns a list of alive clients
 func (c *Coordinator) KnownClients() []string {
 	c.mu.Lock()
 	defer c.mu.Unlock()

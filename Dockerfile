@@ -21,6 +21,6 @@ COPY --from=certificates /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/
 COPY --from=builder /go/src/github.com/robustperception/pushprox/proxy /app
 COPY --from=builder /go/src/github.com/robustperception/pushprox/client /app
 
-# default startup is the proxy. 
+# default startup is the proxy.
 # Can be overridden with the docker --entrypoint flag, or the command field in Kubernetes container v1 API
 ENTRYPOINT ["/app/proxy"]

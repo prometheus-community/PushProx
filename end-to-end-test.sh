@@ -13,7 +13,7 @@ cleanup() {
 
 trap cleanup EXIT
 
-./node_exporter-0.17.0.linux-amd64/node_exporter &
+./node_exporter &
 echo $! > "${tmpdir}/node_exporter.pid"
 while ! curl -s -f -L http://localhost:9100; do
   echo 'Waiting for node_exporter'
@@ -27,14 +27,14 @@ while ! curl -s -f -L http://localhost:8080/clients; do
   sleep 2
 done
 
-./build/client  --log.level=debug --proxy-url=http://$(hostname):8080 &
+./build/client  --log.level=debug --proxy-url=http://localhost:8080 &
 echo $! > "${tmpdir}/client.pid"
 while [ "$(curl -s -L 'http://localhost:8080/clients' | jq 'length')" != '1' ] ; do
   echo 'Waiting for client'
   sleep 2
 done
 
-./prometheus-2.9.1.linux-amd64/prometheus --config.file=prometheus-2.9.1.linux-amd64/prometheus.yml --log.level=debug &
+./prometheus --config.file=prometheus.yml --log.level=debug &
 echo $! > "${tmpdir}/prometheus.pid"
 while ! curl -s -f -L http://localhost:9090/-/ready; do
   echo 'Waiting for Prometheus'
