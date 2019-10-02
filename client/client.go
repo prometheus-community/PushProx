@@ -64,6 +64,7 @@ func init() {
 	prometheus.MustRegister(pushErrorCounter, pollErrorCounter, scrapeErrorCounter)
 }
 
+// Coordinator for scrape requests and responses
 type Coordinator struct {
 	logger log.Logger
 }
@@ -71,7 +72,8 @@ type Coordinator struct {
 func (c *Coordinator) doScrape(request *http.Request, client *http.Client) {
 	logger := log.With(c.logger, "scrape_id", request.Header.Get("id"))
 	timeout, _ := util.GetHeaderTimeout(request.Header)
-	ctx, _ := context.WithTimeout(request.Context(), timeout)
+	ctx, cancel := context.WithTimeout(request.Context(), timeout)
+	defer cancel()
 	request = request.WithContext(ctx)
 	// We cannot handle https requests at the proxy, as we would only
 	// see a CONNECT, so use a URL parameter to trigger it.

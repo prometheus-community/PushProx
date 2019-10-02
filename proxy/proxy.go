@@ -154,7 +154,8 @@ func (h *httpHandler) handleListClients(w http.ResponseWriter, r *http.Request) 
 
 // handleProxy handles proxied scrapes from Prometheus.
 func (h *httpHandler) handleProxy(w http.ResponseWriter, r *http.Request) {
-	ctx, _ := context.WithTimeout(r.Context(), util.GetScrapeTimeout(maxScrapeTimeout, defaultScrapeTimeout, r.Header))
+	ctx, cancel := context.WithTimeout(r.Context(), util.GetScrapeTimeout(maxScrapeTimeout, defaultScrapeTimeout, r.Header))
+	defer cancel()
 	request := r.WithContext(ctx)
 	request.RequestURI = ""
 
@@ -183,7 +184,11 @@ func main() {
 	kingpin.HelpFlag.Short('h')
 	kingpin.Parse()
 	logger := promlog.New(&promlogConfig)
-	coordinator := NewCoordinator(logger)
+	coordinator, err := NewCoordinator(logger)
+	if err != nil {
+		level.Error(logger).Log("msg", "Coordinator initialization failed", "err", err)
+		os.Exit(1)
+	}
 
 	mux := http.NewServeMux()
 	handler := newHTTPHandler(logger, coordinator, mux)

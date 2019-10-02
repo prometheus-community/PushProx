@@ -3,7 +3,7 @@ github.com/ShowMax/go-fqdn
 # github.com/alecthomas/template v0.0.0-20190718012654-fb15b899a751
 github.com/alecthomas/template
 github.com/alecthomas/template/parse
-# github.com/alecthomas/units v0.0.0-20190910110746-680d30ca3117
+# github.com/alecthomas/units v0.0.0-20190924025748-f65c72e2690d
 github.com/alecthomas/units
 # github.com/beorn7/perks v1.0.0
 github.com/beorn7/perks/quantile
@@ -14,6 +14,8 @@ github.com/go-kit/kit/log/level
 github.com/go-logfmt/logfmt
 # github.com/golang/protobuf v1.3.1
 github.com/golang/protobuf/proto
+# github.com/google/uuid v1.1.1
+github.com/google/uuid
 # github.com/kr/logfmt v0.0.0-20140226030751-b84e30acd515
 github.com/kr/logfmt
 # github.com/matttproud/golang_protobuf_extensions v1.0.1
