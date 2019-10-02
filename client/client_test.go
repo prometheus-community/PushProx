@@ -43,7 +43,6 @@ func TestDoScrape(t *testing.T) {
 		t.Fatal(err)
 	}
 	req.Header.Add("X-Prometheus-Scrape-Timeout-Seconds", "10.0")
-	*strictMode = true
 	*myFqdn = ts.URL
 	c.doScrape(req, ts.Client())
 }
