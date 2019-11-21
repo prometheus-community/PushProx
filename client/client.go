@@ -104,12 +104,7 @@ func (c *Coordinator) doScrape(request *http.Request, client *http.Client) {
 		request.URL.RawQuery = params.Encode()
 	}
 
-	fqdnURL, err := url.Parse(*myFqdn)
-	if err != nil {
-		c.handleErr(request, client, err)
-		return
-	}
-	if request.URL.Hostname() != fqdnURL.Hostname() {
+	if request.URL.Hostname() != *myFqdn {
 		c.handleErr(request, client, errors.New("scrape target doesn't match client fqdn"))
 		return
 	}
@@ -225,6 +220,12 @@ func main() {
 	kingpin.Parse()
 	logger := promlog.New(&promlogConfig)
 	coordinator := Coordinator{logger: logger}
+
+	if myFqdn == nil || strings.TrimSpace(*myFqdn) == "" {
+		level.Error(coordinator.logger).Log("msg", "client fqdn cannot be empty")
+		os.Exit(1)
+	}
+
 	if *proxyURL == "" {
 		level.Error(coordinator.logger).Log("msg", "--proxy-url flag must be specified.")
 		os.Exit(1)
