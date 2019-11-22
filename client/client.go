@@ -221,7 +221,7 @@ func main() {
 	logger := promlog.New(&promlogConfig)
 	coordinator := Coordinator{logger: logger}
 
-	if myFqdn == nil || strings.TrimSpace(*myFqdn) == "" {
+	if *myFqdn == "" {
 		level.Error(coordinator.logger).Log("msg", "client fqdn cannot be empty")
 		os.Exit(1)
 	}
