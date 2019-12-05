@@ -210,6 +210,7 @@ func (d *decorrelatedJitter) calc() {
 }
 
 func (d *decorrelatedJitter) sleep() {
+	d.calc()
 	time.Sleep(time.Duration(d.duration))
 }
 
