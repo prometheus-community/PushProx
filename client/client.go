@@ -203,7 +203,7 @@ func newJitter() decorrelatedJitter {
 	}
 }
 
-func (d *decorrelatedJitter) calc() {
+func (d *decorrelatedJitter) calc() time.Duration {
 	change := rand.Float64() * float64(d.duration*time.Duration(3)-d.min)
 	d.duration = d.min + time.Duration(change)
 	if d.duration > d.cap {
@@ -212,11 +212,11 @@ func (d *decorrelatedJitter) calc() {
 	if d.duration < d.min {
 		d.duration = d.min
 	}
+	return d.duration
 }
 
 func (d *decorrelatedJitter) sleep() {
-	d.calc()
-	time.Sleep(time.Duration(d.duration))
+	time.Sleep(d.calc())
 }
 
 func main() {
