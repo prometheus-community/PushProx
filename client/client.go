@@ -8,7 +8,6 @@ import (
 	"crypto/x509"
 	"fmt"
 	"io/ioutil"
-	"math"
 	"math/rand"
 	"net"
 	"net/http"
@@ -191,26 +190,33 @@ func loop(c Coordinator, client *http.Client) error {
 
 // decorrelated Jitter increases the maximum jitter based on the last random value.
 type decorrelatedJitter struct {
-	duration float64 // sleep time
-	min      float64 // min sleep time
-	cap      float64 // max sleep time
+	duration time.Duration // sleep time
+	min      time.Duration // min sleep time
+	cap      time.Duration // max sleep time
 }
 
 func newJitter() decorrelatedJitter {
 	rand.Seed(time.Now().UnixNano())
 	return decorrelatedJitter{
-		duration: 1,
-		min:      1,
-		cap:      10,
+		min: 50 * time.Millisecond,
+		cap: 5 * time.Second,
 	}
 }
 
-func (d *decorrelatedJitter) calc() {
-	d.duration = math.Min(d.cap, d.min+rand.Float64()*(d.duration*3-d.min))
+func (d *decorrelatedJitter) calc() time.Duration {
+	change := rand.Float64() * float64(d.duration*time.Duration(3)-d.min)
+	d.duration = d.min + time.Duration(change)
+	if d.duration > d.cap {
+		d.duration = d.cap
+	}
+	if d.duration < d.min {
+		d.duration = d.min
+	}
+	return d.duration
 }
 
 func (d *decorrelatedJitter) sleep() {
-	time.Sleep(time.Duration(d.duration))
+	time.Sleep(d.calc())
 }
 
 func main() {
