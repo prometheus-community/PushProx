@@ -198,9 +198,8 @@ type decorrelatedJitter struct {
 func newJitter() decorrelatedJitter {
 	rand.Seed(time.Now().UnixNano())
 	return decorrelatedJitter{
-		duration: 1,
-		min:      1,
-		cap:      10,
+		min: 50 * time.Millisecond,
+		cap: 5 * time.Second,
 	}
 }
 
