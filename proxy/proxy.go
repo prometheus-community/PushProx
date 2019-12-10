@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"os"
 	"strings"
+	"sync"
 
 	kingpin "gopkg.in/alecthomas/kingpin.v2"
 
@@ -32,6 +33,9 @@ var (
 	listenAddress        = kingpin.Flag("web.listen-address", "Address to listen on for proxy and client requests.").Default(":8080").String()
 	maxScrapeTimeout     = kingpin.Flag("scrape.max-timeout", "Any scrape with a timeout higher than this will have to be clamped to this.").Default("5m").Duration()
 	defaultScrapeTimeout = kingpin.Flag("scrape.default-timeout", "If a scrape lacks a timeout, use this value.").Default("15s").Duration()
+	httpsListenAddress   = kingpin.Flag("https.listen-address", "HTTPS address to listen on for proxy and client requests.").Default(":8443").String()
+	tlsCert              = kingpin.Flag("tls.cert", "<cert> Certificate file").String()
+	tlsKey               = kingpin.Flag("tls.key", "<key> Private key file").String()
 )
 
 var (
@@ -193,9 +197,27 @@ func main() {
 	mux := http.NewServeMux()
 	handler := newHTTPHandler(logger, coordinator, mux)
 
-	level.Info(logger).Log("msg", "Listening", "address", *listenAddress)
-	if err := http.ListenAndServe(*listenAddress, handler); err != nil {
-		level.Error(logger).Log("msg", "Listening failed", "err", err)
-		os.Exit(1)
+	var wg sync.WaitGroup
+
+	if *tlsCert != "" && *tlsKey != "" {
+		level.Info(logger).Log("msg", "HTTPS Listening", "address", *httpsListenAddress)
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			if err := http.ListenAndServeTLS(*httpsListenAddress, *tlsCert, *tlsKey, handler); err != nil {
+				level.Error(logger).Log("msg", "HTTPS listening failed", "err", err)
+			}
+		}()
 	}
+
+	level.Info(logger).Log("msg", "Listening", "address", *listenAddress)
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		if err := http.ListenAndServe(*listenAddress, handler); err != nil {
+			level.Error(logger).Log("msg", "Listening failed", "err", err)
+		}
+	}()
+
+	wg.Wait()
 }
