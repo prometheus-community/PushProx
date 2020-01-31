@@ -1,4 +1,4 @@
-build/
-node_exporter*
-prometheus*
-data/
+/build/
+/node_exporter*
+/prometheus*
+/data/

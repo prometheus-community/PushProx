@@ -4,7 +4,7 @@ version: 2.1
 executors:
   golang:
     docker:
-    - image: circleci/golang:1.12
+    - image: circleci/golang:1.13
 
 jobs:
   build:
@@ -50,8 +50,6 @@ jobs:
           path: build
 
   release:
-    docker:
-    - image: circleci/golang:1.11
     executor: golang
     steps:
     - checkout
