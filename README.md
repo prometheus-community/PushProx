@@ -10,22 +10,20 @@ While this is reasonably robust in practice, this is a work in progress.
 First build the proxy and client:
 
 ```
-go get github.com/robustperception/pushprox/{client,proxy}
-cd ${GOPATH-$HOME/go}/src/github.com/robustperception/pushprox/client
-go build
-cd ${GOPATH-$HOME/go}/src/github.com/robustperception/pushprox/proxy
-go build
+git clone https://github.com/robustperception/pushprox.git
+cd pushprox
+make build
 ```
 
 Run the proxy somewhere both Prometheus and the clients can get to:
 
 ```
-./proxy
+./pushprox-proxy
 ```
 
 On every target machine run the client, pointing it at the proxy:
 ```
-./client --proxy-url=http://proxy:8080/
+./pushprox-client --proxy-url=http://proxy:8080/
 ```
 
 In Prometheus, use the proxy as a `proxy_url`:
@@ -67,6 +65,8 @@ Next, Prometheus tries to scrape the target with hostname `fqdn-x` via the Proxy
 Using the fqdn received in (1), the Proxy now routes the scrape to the correct Client: the scrape request is in the response body of the poll (3).
 This scrape request is executed by the client (4), the response containing metrics (5) is posted to the Proxy (6). 
 On its turn, the Proxy returns this to Prometheus (7) as a reponse to the initial scrape of (2).
+
+PushProx passes all HTTP headers transparently, features like compression and accept encoding are up to the scraping Prometheus server.
 
 ## Security
 

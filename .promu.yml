@@ -1,0 +1,16 @@
+go:
+    # Whenever the Go version is updated here, .travis.yml and
+    # .circle/config.yml should also be updated.
+    version: 1.13
+repository:
+    path: github.com/robustperception/pushprox
+build:
+    binaries:
+        - name: pushprox-client
+          path: ./cmd/client
+        - name: pushprox-proxy
+          path: ./cmd/proxy
+    flags: -mod=vendor -a -tags netgo
+tarball:
+    files:
+        - LICENSE

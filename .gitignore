@@ -1,4 +1,8 @@
-build/
-node_exporter*
-prometheus*
-data/
+/.build/
+/.release/
+/.tarballs/
+/node_exporter*
+/prometheus*
+/data/
+/pushprox-client
+/pushprox-proxy
