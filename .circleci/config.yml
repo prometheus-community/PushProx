@@ -37,18 +37,6 @@ jobs:
           name: Run everything and test that Prometheus can scrape node_exporter via pushprox
           command: ./end-to-end-test.sh
 
-  publish_release:
-    executor: golang
-
-    steps:
-    - prometheus/setup_build_environment
-    - run: promu crossbuild tarballs
-    - run: promu checksum .tarballs
-    - run: promu release .tarballs
-    - store_artifacts:
-        path: .tarballs
-        destination: releases
-
 workflows:
   version: 2
   stuff:
@@ -62,7 +50,15 @@ workflows:
         filters:
           tags:
             only: /.*/
-    - publish_release:
+    - prometheus/publish_master:
+        context: org-context
+        requires:
+        - test
+        - build
+        filters:
+          branches:
+            only: master
+    - prometheus/publish_release:
         context: org-context
         requires:
         - test
