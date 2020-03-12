@@ -5,8 +5,8 @@ FROM quay.io/prometheus/busybox-${OS}-${ARCH}:glibc
 
 ARG ARCH="amd64"
 ARG OS="linux"
-COPY .build/${OS}-${ARCH}/pushprox-proxy /bin/pushprox-proxy
-COPY .build/${OS}-${ARCH}/pushprox-client /bin/pushprox-client
+COPY .build/${OS}-${ARCH}/pushprox-proxy /app/pushprox-proxy
+COPY .build/${OS}-${ARCH}/pushprox-client /app/pushprox-client
 
 # The default startup is the proxy.
 # This can be overridden with the docker --entrypoint flag or the command
