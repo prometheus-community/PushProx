@@ -7,20 +7,23 @@ orbs:
 executors:
   golang:
     docker:
-    - image: circleci/golang:1.13
+    - image: circleci/golang:1.14
 
 jobs:
   test:
     executor: golang
+    environment:
+      prom_ver: 2.18.1
+      node_ver: 1.0.0
     steps:
       - prometheus/setup_environment
       - run: make build
-      - run: wget https://github.com/prometheus/node_exporter/releases/download/v0.18.1/node_exporter-0.18.1.linux-amd64.tar.gz
-      - run: tar xzf node_exporter-0.18.1.linux-amd64.tar.gz
-      - run: cp -v node_exporter-0.18.1.linux-amd64/node_exporter ./node_exporter
-      - run: wget https://github.com/prometheus/prometheus/releases/download/v2.15.2/prometheus-2.15.2.linux-amd64.tar.gz
-      - run: tar xzf prometheus-2.15.2.linux-amd64.tar.gz
-      - run: cp -v prometheus-2.15.2.linux-amd64/prometheus ./prometheus
+      - run: wget https://github.com/prometheus/node_exporter/releases/download/v${node_ver}/node_exporter-${node_ver}.linux-amd64.tar.gz
+      - run: tar xzf node_exporter-${node_ver}.linux-amd64.tar.gz
+      - run: cp -v node_exporter-${node_ver}.linux-amd64/node_exporter ./node_exporter
+      - run: wget https://github.com/prometheus/prometheus/releases/download/v${prom_ver}/prometheus-${prom_ver}.linux-amd64.tar.gz
+      - run: tar xzf prometheus-${prom_ver}.linux-amd64.tar.gz
+      - run: cp -v prometheus-${prom_ver}.linux-amd64/prometheus ./prometheus
       - run:
           name: Configure Prometheus
           command: |
