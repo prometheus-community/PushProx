@@ -1,9 +1,8 @@
 go:
-    # Whenever the Go version is updated here, .travis.yml and
-    # .circle/config.yml should also be updated.
-    version: 1.13
+    # This must match .circle/config.yml.
+    version: 1.14
 repository:
-    path: github.com/robustperception/pushprox
+    path: github.com/prometheus-community/pushprox
 build:
     binaries:
         - name: pushprox-client
