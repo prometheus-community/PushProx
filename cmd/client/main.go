@@ -49,6 +49,7 @@ var (
 	tlsCert     = kingpin.Flag("tls.cert", "<cert> Client certificate file").String()
 	tlsKey      = kingpin.Flag("tls.key", "<key> Private key file").String()
 	metricsAddr = kingpin.Flag("metrics-addr", "Serve Prometheus metrics at this address").Default(":9369").String()
+	target      = kingpin.Flag("target", "Scraping target").String()
 
 	retryInitialWait = kingpin.Flag("proxy.retry.initial-wait", "Amount of time to wait after proxy failure").Default("1s").Duration()
 	retryMaxWait     = kingpin.Flag("proxy.retry.max-wait", "Maximum amount of time to wait between proxy poll retries").Default("5s").Duration()
@@ -131,6 +132,14 @@ func (c *Coordinator) doScrape(request *http.Request, client *http.Client) {
 	if request.URL.Hostname() != *myFqdn {
 		c.handleErr(request, client, errors.New("scrape target doesn't match client fqdn"))
 		return
+	}
+
+	if *target != "" {
+		if request.URL.Port() == "" {
+			request.URL.Host = *target
+		} else {
+			request.URL.Host = *target + ":" + request.URL.Port()
+		}
 	}
 
 	scrapeResp, err := client.Do(request)
@@ -278,6 +287,10 @@ func main() {
 				level.Warn(coordinator.logger).Log("msg", "ListenAndServe", "err", err)
 			}
 		}()
+	}
+
+	if *target != "" {
+		level.Info(coordinator.logger).Log("msg", "Scraping target", "target", *target)
 	}
 
 	transport := &http.Transport{
