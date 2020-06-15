@@ -21,7 +21,6 @@ import (
 	"crypto/x509"
 	"fmt"
 	"io/ioutil"
-	"math/rand"
 	"net"
 	"net/http"
 	"net/url"
@@ -32,14 +31,15 @@ import (
 	kingpin "gopkg.in/alecthomas/kingpin.v2"
 
 	"github.com/ShowMax/go-fqdn"
+	"github.com/cenkalti/backoff/v4"
 	"github.com/go-kit/kit/log"
 	"github.com/go-kit/kit/log/level"
 	"github.com/pkg/errors"
+	"github.com/prometheus-community/pushprox/util"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/prometheus/common/promlog"
 	"github.com/prometheus/common/promlog/flag"
-	"github.com/prometheus-community/pushprox/util"
 )
 
 var (
@@ -49,6 +49,9 @@ var (
 	tlsCert     = kingpin.Flag("tls.cert", "<cert> Client certificate file").String()
 	tlsKey      = kingpin.Flag("tls.key", "<key> Private key file").String()
 	metricsAddr = kingpin.Flag("metrics-addr", "Serve Prometheus metrics at this address").Default(":9369").String()
+
+	retryInitialWait = kingpin.Flag("proxy.retry.initial-wait", "Amount of time to wait after proxy failure").Default("1s").Duration()
+	retryMaxWait     = kingpin.Flag("proxy.retry.max-wait", "Maximum amount of time to wait between proxy poll retries").Default("5s").Duration()
 )
 
 var (
@@ -74,6 +77,15 @@ var (
 
 func init() {
 	prometheus.MustRegister(pushErrorCounter, pollErrorCounter, scrapeErrorCounter)
+}
+
+func newBackOffFromFlags() backoff.BackOff {
+	b := backoff.NewExponentialBackOff()
+	b.InitialInterval = *retryInitialWait
+	b.Multiplier = 1.5
+	b.MaxInterval = *retryMaxWait
+	b.MaxElapsedTime = time.Duration(0)
+	return b
 }
 
 // Coordinator for scrape requests and responses
@@ -168,7 +180,7 @@ func (c *Coordinator) doPush(resp *http.Response, origRequest *http.Request, cli
 	return nil
 }
 
-func loop(c Coordinator, client *http.Client) error {
+func (c *Coordinator) doPoll(client *http.Client) error {
 	base, err := url.Parse(*proxyURL)
 	if err != nil {
 		level.Error(c.logger).Log("msg", "Error parsing url:", "err", err)
@@ -201,35 +213,18 @@ func loop(c Coordinator, client *http.Client) error {
 	return nil
 }
 
-// decorrelated Jitter increases the maximum jitter based on the last random value.
-type decorrelatedJitter struct {
-	duration time.Duration // sleep time
-	min      time.Duration // min sleep time
-	cap      time.Duration // max sleep time
-}
-
-func newJitter() decorrelatedJitter {
-	rand.Seed(time.Now().UnixNano())
-	return decorrelatedJitter{
-		min: 50 * time.Millisecond,
-		cap: 5 * time.Second,
+func (c *Coordinator) loop(bo backoff.BackOff, client *http.Client) {
+	op := func() error {
+		return c.doPoll(client)
 	}
-}
 
-func (d *decorrelatedJitter) calc() time.Duration {
-	change := rand.Float64() * float64(d.duration*time.Duration(3)-d.min)
-	d.duration = d.min + time.Duration(change)
-	if d.duration > d.cap {
-		d.duration = d.cap
+	for {
+		if err := backoff.RetryNotify(op, bo, func(err error, _ time.Duration) {
+			pollErrorCounter.Inc()
+		}); err != nil {
+			level.Error(c.logger).Log("err", err)
+		}
 	}
-	if d.duration < d.min {
-		d.duration = d.min
-	}
-	return d.duration
-}
-
-func (d *decorrelatedJitter) sleep() {
-	time.Sleep(d.calc())
 }
 
 func main() {
@@ -299,14 +294,7 @@ func main() {
 		TLSClientConfig:       tlsConfig,
 	}
 
-	jitter := newJitter()
 	client := &http.Client{Transport: transport}
-	for {
-		err := loop(coordinator, client)
-		if err != nil {
-			pollErrorCounter.Inc()
-			jitter.sleep()
-			continue
-		}
-	}
+
+	coordinator.loop(newBackOffFromFlags(), client)
 }

@@ -22,16 +22,6 @@ import (
 	"github.com/pkg/errors"
 )
 
-func TestJitter(t *testing.T) {
-	jitter := newJitter()
-	for i := 0; i < 100000; i++ {
-		duration := jitter.calc()
-		if !(jitter.min <= duration || duration <= jitter.cap) {
-			t.Fatal("invalid jitter value: ", duration)
-		}
-	}
-}
-
 type TestLogger struct{}
 
 func (tl *TestLogger) Log(vars ...interface{}) error {
@@ -76,7 +66,7 @@ func TestHandleErr(t *testing.T) {
 func TestLoop(t *testing.T) {
 	ts, c := prepareTest()
 	defer ts.Close()
-	if err := loop(c, ts.Client()); err != nil {
+	if err := c.doPoll(ts.Client()); err != nil {
 		t.Fatal(err)
 	}
 }
