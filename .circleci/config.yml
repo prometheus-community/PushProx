@@ -2,7 +2,7 @@
 version: 2.1
 
 orbs:
-  prometheus: prometheus/prometheus@0.4.0
+  prometheus: prometheus/prometheus@0.8.0
 
 executors:
   golang:
@@ -55,6 +55,8 @@ workflows:
             only: /.*/
     - prometheus/publish_master:
         context: org-context
+        docker_hub_organization: prometheuscommunity
+        quay_io_organization: prometheuscommunity
         requires:
         - test
         - build
@@ -63,6 +65,8 @@ workflows:
             only: master
     - prometheus/publish_release:
         context: org-context
+        docker_hub_organization: prometheuscommunity
+        quay_io_organization: prometheuscommunity
         requires:
         - test
         - build
