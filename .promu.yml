@@ -10,6 +10,13 @@ build:
         - name: pushprox-proxy
           path: ./cmd/proxy
     flags: -mod=vendor -a -tags netgo
+crossbuild:
+  platforms:
+    - linux/amd64
+    - linux/armv7
+    - linux/arm64
+    - linux/ppc64le
+    - linux/s390x
 tarball:
     files:
         - LICENSE
