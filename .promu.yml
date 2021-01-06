@@ -9,7 +9,7 @@ build:
           path: ./cmd/client
         - name: pushprox-proxy
           path: ./cmd/proxy
-    flags: -mod=vendor -a -tags netgo
+    flags: -a -tags netgo
 tarball:
     files:
         - LICENSE

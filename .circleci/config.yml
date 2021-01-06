@@ -13,10 +13,11 @@ jobs:
   test:
     executor: golang
     environment:
-      prom_ver: 2.18.1
-      node_ver: 1.0.0
+      prom_ver: 2.20.1
+      node_ver: 1.0.1
     steps:
       - prometheus/setup_environment
+      - run: go mod download
       - run: make build
       - run: wget https://github.com/prometheus/node_exporter/releases/download/v${node_ver}/node_exporter-${node_ver}.linux-amd64.tar.gz
       - run: tar xzf node_exporter-${node_ver}.linux-amd64.tar.gz
