@@ -174,7 +174,7 @@ func loop(c Coordinator, client *http.Client) error {
 		level.Error(c.logger).Log("msg", "Error parsing url:", "err", err)
 		return errors.Wrap(err, "error parsing url")
 	}
-	u, err := url.Parse("poll")
+	u, err := url.Parse("poll/" + *myFqdn)
 	if err != nil {
 		level.Error(c.logger).Log("msg", "Error parsing url:", "err", err)
 		return errors.Wrap(err, "error parsing url poll")
