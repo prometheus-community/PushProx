@@ -9,7 +9,8 @@ build:
           path: ./cmd/client
         - name: pushprox-proxy
           path: ./cmd/proxy
-    flags: -a -tags netgo
+    flags: -trimpath -a -tags netgo
+    ldflags: -s -w -X main.Version=={{.Version}}
 tarball:
     files:
         - LICENSE
