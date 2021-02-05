@@ -1,6 +1,6 @@
 go:
     # This must match .circle/config.yml.
-    version: 1.14
+    version: 1.15
 repository:
     path: github.com/prometheus-community/pushprox
 build:
