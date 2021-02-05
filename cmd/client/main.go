@@ -43,12 +43,13 @@ import (
 )
 
 var (
-	myFqdn      = kingpin.Flag("fqdn", "FQDN to register with").Default(fqdn.Get()).String()
-	proxyURL    = kingpin.Flag("proxy-url", "Push proxy to talk to.").Required().String()
-	caCertFile  = kingpin.Flag("tls.cacert", "<file> CA certificate to verify peer against").String()
-	tlsCert     = kingpin.Flag("tls.cert", "<cert> Client certificate file").String()
-	tlsKey      = kingpin.Flag("tls.key", "<key> Private key file").String()
-	metricsAddr = kingpin.Flag("metrics-addr", "Serve Prometheus metrics at this address").Default(":9369").String()
+	myFqdn           = kingpin.Flag("fqdn", "FQDN to register with").Default(fqdn.Get()).String()
+	proxyURL         = kingpin.Flag("proxy-url", "Push proxy to talk to.").Required().String()
+	caCertFile       = kingpin.Flag("tls.cacert", "<file> CA certificate to verify peer against").String()
+	tlsCert          = kingpin.Flag("tls.cert", "<cert> Client certificate file").String()
+	tlsKey           = kingpin.Flag("tls.key", "<key> Private key file").String()
+	metricsAddr      = kingpin.Flag("metrics-addr", "Serve Prometheus metrics at this address").Default(":9369").String()
+	internalEndpoint = kingpin.Flag("internal-endpoint", "If set, requests will be forwarded to this endpoint").String()
 
 	retryInitialWait = kingpin.Flag("proxy.retry.initial-wait", "Amount of time to wait after proxy failure").Default("1s").Duration()
 	retryMaxWait     = kingpin.Flag("proxy.retry.max-wait", "Maximum amount of time to wait between proxy poll retries").Default("5s").Duration()
@@ -131,6 +132,11 @@ func (c *Coordinator) doScrape(request *http.Request, client *http.Client) {
 	if request.URL.Hostname() != *myFqdn {
 		c.handleErr(request, client, errors.New("scrape target doesn't match client fqdn"))
 		return
+	}
+
+	if *internalEndpoint != "" {
+		newHost := fmt.Sprintf("%s:%s", *internalEndpoint, request.URL.Port())
+		request.URL.Host = newHost
 	}
 
 	scrapeResp, err := client.Do(request)
