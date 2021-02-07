@@ -30,7 +30,7 @@ import (
 
 	kingpin "gopkg.in/alecthomas/kingpin.v2"
 
-	"github.com/ShowMax/go-fqdn"
+	"github.com/Showmax/go-fqdn"
 	"github.com/cenkalti/backoff/v4"
 	"github.com/go-kit/kit/log"
 	"github.com/go-kit/kit/log/level"

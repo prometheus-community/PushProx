@@ -7,13 +7,13 @@ orbs:
 executors:
   golang:
     docker:
-    - image: circleci/golang:1.14
+    - image: circleci/golang:1.15
 
 jobs:
   test:
     executor: golang
     environment:
-      prom_ver: 2.20.1
+      prom_ver: 2.24.1
       node_ver: 1.0.1
     steps:
       - prometheus/setup_environment
