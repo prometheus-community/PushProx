@@ -2,19 +2,19 @@
 version: 2.1
 
 orbs:
-  prometheus: prometheus/prometheus@0.8.0
+  prometheus: prometheus/prometheus@0.11.0
 
 executors:
   golang:
     docker:
-    - image: circleci/golang:1.15
+    - image: circleci/golang:1.16
 
 jobs:
   test:
     executor: golang
     environment:
-      prom_ver: 2.24.1
-      node_ver: 1.0.1
+      prom_ver: 2.25.2
+      node_ver: 1.1.2
     steps:
       - prometheus/setup_environment
       - run: go mod download
