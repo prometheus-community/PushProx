@@ -17,8 +17,7 @@ jobs:
       node_ver: 1.1.2
     steps:
       - prometheus/setup_environment
-      - run: go mod download
-      - run: make build
+      - run: make
       - run: wget https://github.com/prometheus/node_exporter/releases/download/v${node_ver}/node_exporter-${node_ver}.linux-amd64.tar.gz
       - run: tar xzf node_exporter-${node_ver}.linux-amd64.tar.gz
       - run: cp -v node_exporter-${node_ver}.linux-amd64/node_exporter ./node_exporter
