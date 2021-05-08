@@ -166,6 +166,7 @@ func (c *Coordinator) doPush(resp *http.Response, origRequest *http.Request, cli
 	url := base.ResolveReference(u)
 
 	buf := &bytes.Buffer{}
+	//nolint:errcheck // https://github.com/prometheus-community/PushProx/issues/111
 	resp.Write(buf)
 	request := &http.Request{
 		Method:        "POST",

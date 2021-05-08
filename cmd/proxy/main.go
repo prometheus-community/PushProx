@@ -150,6 +150,7 @@ func (h *httpHandler) handlePoll(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, fmt.Sprintf("Error WaitForScrapeInstruction: %s", err.Error()), 408)
 		return
 	}
+	//nolint:errcheck // https://github.com/prometheus-community/PushProx/issues/111
 	request.WriteProxy(w) // Send full request as the body of the response.
 	level.Info(h.logger).Log("msg", "Responded to /poll", "url", request.URL.String(), "scrape_id", request.Header.Get("Id"))
 }
@@ -161,6 +162,7 @@ func (h *httpHandler) handleListClients(w http.ResponseWriter, r *http.Request) 
 	for _, k := range known {
 		targets = append(targets, &targetGroup{Targets: []string{k}})
 	}
+	//nolint:errcheck // https://github.com/prometheus-community/PushProx/issues/111
 	json.NewEncoder(w).Encode(targets)
 	level.Info(h.logger).Log("msg", "Responded to /clients", "client_count", len(known))
 }
