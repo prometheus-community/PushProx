@@ -133,10 +133,11 @@ func (h *httpHandler) handlePush(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, fmt.Sprintf("Error pushing: %s", err.Error()), 500)
 		return
 	}
-	level.Info(h.logger).Log("msg", "Got /push", "scrape_id", scrapeResult.Header.Get("Id"))
+	scrapeId := scrapeResult.Header.Get("Id")
+	level.Info(h.logger).Log("msg", "Got /push", "scrape_id", scrapeId)
 	err = h.coordinator.ScrapeResult(scrapeResult)
 	if err != nil {
-		level.Error(h.logger).Log("msg", "Error pushing:", "err", err, "scrape_id", scrapeResult.Header.Get("Id"))
+		level.Error(h.logger).Log("msg", "Error pushing:", "err", err, "scrape_id", scrapeId)
 		http.Error(w, fmt.Sprintf("Error pushing: %s", err.Error()), 500)
 	}
 }
