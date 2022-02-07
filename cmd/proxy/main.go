@@ -162,6 +162,7 @@ func (h *httpHandler) handleListClients(w http.ResponseWriter, r *http.Request) 
 	for _, k := range known {
 		targets = append(targets, &targetGroup{Targets: []string{k}})
 	}
+	w.Header().Set("Content-Type", "application/json")
 	//nolint:errcheck // https://github.com/prometheus-community/PushProx/issues/111
 	json.NewEncoder(w).Encode(targets)
 	level.Info(h.logger).Log("msg", "Responded to /clients", "client_count", len(known))
