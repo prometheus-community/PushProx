@@ -26,6 +26,16 @@ On every target machine run the client, pointing it at the proxy:
 ./pushprox-client --proxy-url=http://proxy:8080/
 ```
 
+Passing custom FQDN:
+```
+./pushprox-client --proxy-url=http://proxy:8080/ --fqdn=foo
+```
+
+Passing custom FQDN list: (Here client continue polling for all specified FQDNs)
+```
+./pushprox-client --proxy-url=http://proxy:8080/ --fqdnList=foo,bar
+```
+
 In Prometheus, use the proxy as a `proxy_url`:
 
 ```
