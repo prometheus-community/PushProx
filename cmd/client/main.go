@@ -21,7 +21,7 @@ import (
 	"crypto/x509"
 	"fmt"
 	"github.com/Showmax/go-fqdn"
-	"github.com/loki/vendor_bkp/github.com/cenkalti/backoff/v4"
+	"github.com/cenkalti/backoff/v4"
 	"io/ioutil"
 	"net"
 	"net/http"
