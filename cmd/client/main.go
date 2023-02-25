@@ -254,8 +254,6 @@ func main() {
 
 		// Setup HTTPS client
 		tlsConfig.Certificates = []tls.Certificate{cert}
-
-		tlsConfig.BuildNameToCertificate()
 	}
 
 	if *caCertFile != "" {
