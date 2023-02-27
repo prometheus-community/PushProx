@@ -49,7 +49,7 @@ func TestDoScrape(t *testing.T) {
 	}
 	req.Header.Add("X-Prometheus-Scrape-Timeout-Seconds", "10.0")
 	*myFqdn = ts.URL
-	c.doScrape(req, ts.Client())
+	c.doScrape(req, ts.Client(), *myFqdn)
 }
 
 func TestHandleErr(t *testing.T) {
@@ -60,13 +60,13 @@ func TestHandleErr(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	c.handleErr(req, ts.Client(), errors.New("test error"))
+	c.handleErr(req, ts.Client(), errors.New("test error"), *myFqdn)
 }
 
 func TestLoop(t *testing.T) {
 	ts, c := prepareTest()
 	defer ts.Close()
-	if err := c.doPoll(ts.Client()); err != nil {
+	if err := c.doPoll(ts.Client(), *myFqdn); err != nil {
 		t.Fatal(err)
 	}
 }

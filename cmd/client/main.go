@@ -20,18 +20,19 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"fmt"
+	"github.com/Showmax/go-fqdn"
+	"github.com/cenkalti/backoff/v4"
 	"io/ioutil"
 	"net"
 	"net/http"
 	"net/url"
 	"os"
 	"strings"
+	"sync"
 	"time"
 
 	kingpin "gopkg.in/alecthomas/kingpin.v2"
 
-	"github.com/Showmax/go-fqdn"
-	"github.com/cenkalti/backoff/v4"
 	"github.com/go-kit/log"
 	"github.com/go-kit/log/level"
 	"github.com/pkg/errors"
@@ -44,6 +45,7 @@ import (
 
 var (
 	myFqdn      = kingpin.Flag("fqdn", "FQDN to register with").Default(fqdn.Get()).String()
+	fqdnList    = kingpin.Flag("fqdnList", "Specify comma separated FQDN values, if running for more than one FQDN").String()
 	proxyURL    = kingpin.Flag("proxy-url", "Push proxy to talk to.").Required().String()
 	caCertFile  = kingpin.Flag("tls.cacert", "<file> CA certificate to verify peer against").String()
 	tlsCert     = kingpin.Flag("tls.cert", "<cert> Client certificate file").String()
@@ -55,23 +57,26 @@ var (
 )
 
 var (
-	scrapeErrorCounter = prometheus.NewCounter(
+	counterLabelFqdn = "fqdn"
+	counterLabelList = []string{counterLabelFqdn}
+
+	scrapeErrorCounter = prometheus.NewCounterVec(
 		prometheus.CounterOpts{
 			Name: "pushprox_client_scrape_errors_total",
 			Help: "Number of scrape errors",
-		},
+		}, counterLabelList,
 	)
-	pushErrorCounter = prometheus.NewCounter(
+	pushErrorCounter = prometheus.NewCounterVec(
 		prometheus.CounterOpts{
 			Name: "pushprox_client_push_errors_total",
 			Help: "Number of push errors",
-		},
+		}, counterLabelList,
 	)
-	pollErrorCounter = prometheus.NewCounter(
+	pollErrorCounter = prometheus.NewCounterVec(
 		prometheus.CounterOpts{
 			Name: "pushprox_client_poll_errors_total",
 			Help: "Number of poll errors",
-		},
+		}, counterLabelList,
 	)
 )
 
@@ -93,27 +98,27 @@ type Coordinator struct {
 	logger log.Logger
 }
 
-func (c *Coordinator) handleErr(request *http.Request, client *http.Client, err error) {
+func (c *Coordinator) handleErr(request *http.Request, client *http.Client, err error, newFqdn string) {
 	level.Error(c.logger).Log("err", err)
-	scrapeErrorCounter.Inc()
+	scrapeErrorCounter.With(prometheus.Labels{counterLabelFqdn: newFqdn}).Inc()
 	resp := &http.Response{
 		StatusCode: http.StatusInternalServerError,
 		Body:       ioutil.NopCloser(strings.NewReader(err.Error())),
 		Header:     http.Header{},
 	}
 	if err = c.doPush(resp, request, client); err != nil {
-		pushErrorCounter.Inc()
+		pushErrorCounter.With(prometheus.Labels{counterLabelFqdn: newFqdn}).Inc()
 		level.Warn(c.logger).Log("msg", "Failed to push failed scrape response:", "err", err)
 		return
 	}
 	level.Info(c.logger).Log("msg", "Pushed failed scrape response")
 }
 
-func (c *Coordinator) doScrape(request *http.Request, client *http.Client) {
+func (c *Coordinator) doScrape(request *http.Request, client *http.Client, newFqdn string) {
 	logger := log.With(c.logger, "scrape_id", request.Header.Get("id"))
 	timeout, err := util.GetHeaderTimeout(request.Header)
 	if err != nil {
-		c.handleErr(request, client, err)
+		c.handleErr(request, client, err, newFqdn)
 		return
 	}
 	ctx, cancel := context.WithTimeout(request.Context(), timeout)
@@ -128,20 +133,20 @@ func (c *Coordinator) doScrape(request *http.Request, client *http.Client) {
 		request.URL.RawQuery = params.Encode()
 	}
 
-	if request.URL.Hostname() != *myFqdn {
-		c.handleErr(request, client, errors.New("scrape target doesn't match client fqdn"))
+	if request.URL.Hostname() != newFqdn {
+		c.handleErr(request, client, errors.New("scrape target doesn't match client fqdn"), newFqdn)
 		return
 	}
 
 	scrapeResp, err := client.Do(request)
 	if err != nil {
 		msg := fmt.Sprintf("failed to scrape %s", request.URL.String())
-		c.handleErr(request, client, errors.Wrap(err, msg))
+		c.handleErr(request, client, errors.Wrap(err, msg), newFqdn)
 		return
 	}
 	level.Info(logger).Log("msg", "Retrieved scrape response")
 	if err = c.doPush(scrapeResp, request, client); err != nil {
-		pushErrorCounter.Inc()
+		pushErrorCounter.With(prometheus.Labels{counterLabelFqdn: newFqdn}).Inc()
 		level.Warn(logger).Log("msg", "Failed to push scrape response:", "err", err)
 		return
 	}
@@ -181,7 +186,7 @@ func (c *Coordinator) doPush(resp *http.Response, origRequest *http.Request, cli
 	return nil
 }
 
-func (c *Coordinator) doPoll(client *http.Client) error {
+func (c *Coordinator) doPoll(client *http.Client, newFqdn string) error {
 	base, err := url.Parse(*proxyURL)
 	if err != nil {
 		level.Error(c.logger).Log("msg", "Error parsing url:", "err", err)
@@ -193,35 +198,35 @@ func (c *Coordinator) doPoll(client *http.Client) error {
 		return errors.Wrap(err, "error parsing url poll")
 	}
 	url := base.ResolveReference(u)
-	resp, err := client.Post(url.String(), "", strings.NewReader(*myFqdn))
+	resp, err := client.Post(url.String(), "", strings.NewReader(newFqdn))
 	if err != nil {
-		level.Error(c.logger).Log("msg", "Error polling:", "err", err)
+		level.Error(c.logger).Log("msg", "Error polling:", "Using-FQDN", newFqdn, "err", err)
 		return errors.Wrap(err, "error polling")
 	}
 	defer resp.Body.Close()
 
 	request, err := http.ReadRequest(bufio.NewReader(resp.Body))
 	if err != nil {
-		level.Error(c.logger).Log("msg", "Error reading request:", "err", err)
+		level.Error(c.logger).Log("msg", "Error reading request:", "Using-FQDN", newFqdn, "err", err)
 		return errors.Wrap(err, "error reading request")
 	}
 	level.Info(c.logger).Log("msg", "Got scrape request", "scrape_id", request.Header.Get("id"), "url", request.URL)
 
 	request.RequestURI = ""
 
-	go c.doScrape(request, client)
+	go c.doScrape(request, client, newFqdn)
 
 	return nil
 }
 
-func (c *Coordinator) loop(bo backoff.BackOff, client *http.Client) {
+func (c *Coordinator) loop(bo backoff.BackOff, client *http.Client, newFqdn string) {
 	op := func() error {
-		return c.doPoll(client)
+		return c.doPoll(client, newFqdn)
 	}
 
 	for {
 		if err := backoff.RetryNotify(op, bo, func(err error, _ time.Duration) {
-			pollErrorCounter.Inc()
+			pollErrorCounter.With(prometheus.Labels{counterLabelFqdn: newFqdn}).Inc()
 		}); err != nil {
 			level.Error(c.logger).Log("err", err)
 		}
@@ -242,7 +247,7 @@ func main() {
 	}
 	// Make sure proxyURL ends with a single '/'
 	*proxyURL = strings.TrimRight(*proxyURL, "/") + "/"
-	level.Info(coordinator.logger).Log("msg", "URL and FQDN info", "proxy_url", *proxyURL, "fqdn", *myFqdn)
+	level.Info(coordinator.logger).Log("msg", "URL info", "proxy_url", *proxyURL)
 
 	tlsConfig := &tls.Config{}
 	if *tlsCert != "" {
@@ -295,5 +300,20 @@ func main() {
 
 	client := &http.Client{Transport: transport}
 
-	coordinator.loop(newBackOffFromFlags(), client)
+	//Check if FQDN list is not passed - use single FDQN
+	if *fqdnList == "" {
+		coordinator.loop(newBackOffFromFlags(), client, *myFqdn)
+	} else {
+		fqdnLister := strings.Split(*fqdnList, ",")
+		fqdnCount := len(fqdnLister)
+		var wg sync.WaitGroup
+		level.Info(coordinator.logger).Log("msg", "Polling in parallel for all FQDN", "FQDN Count", fqdnCount)
+		for i := 0; i < fqdnCount; i++ {
+			wg.Add(1)
+			go coordinator.loop(newBackOffFromFlags(), client, fqdnLister[i])
+
+		}
+		wg.Wait()
+	}
+
 }
