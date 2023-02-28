@@ -73,6 +73,8 @@ func NewCoordinator(logger log.Logger) (*Coordinator, error) {
 }
 
 // Generate a unique ID
+// It is important this ID is cryptographically unique to ensure clients can't
+// be mixed up.
 func (c *Coordinator) genID() (string, error) {
 	id, err := uuid.NewRandom()
 	return id.String(), err
@@ -114,6 +116,8 @@ func (c *Coordinator) DoScrape(ctx context.Context, r *http.Request) (*http.Resp
 		return nil, err
 	}
 	level.Info(c.logger).Log("msg", "DoScrape", "scrape_id", id, "url", r.URL.String())
+	// It is important this id is cryptographically generated as it is relied
+	// upon to match the request and the response.
 	r.Header.Add("Id", id)
 	select {
 	case <-ctx.Done():
