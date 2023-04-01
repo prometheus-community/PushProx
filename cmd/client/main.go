@@ -20,7 +20,7 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"net"
 	"net/http"
 	"net/url"
@@ -28,9 +28,8 @@ import (
 	"strings"
 	"time"
 
-	kingpin "gopkg.in/alecthomas/kingpin.v2"
-
 	"github.com/Showmax/go-fqdn"
+	"github.com/alecthomas/kingpin/v2"
 	"github.com/cenkalti/backoff/v4"
 	"github.com/go-kit/log"
 	"github.com/go-kit/log/level"
@@ -98,7 +97,7 @@ func (c *Coordinator) handleErr(request *http.Request, client *http.Client, err 
 	scrapeErrorCounter.Inc()
 	resp := &http.Response{
 		StatusCode: http.StatusInternalServerError,
-		Body:       ioutil.NopCloser(strings.NewReader(err.Error())),
+		Body:       io.NopCloser(strings.NewReader(err.Error())),
 		Header:     http.Header{},
 	}
 	if err = c.doPush(resp, request, client); err != nil {
@@ -171,7 +170,7 @@ func (c *Coordinator) doPush(resp *http.Response, origRequest *http.Request, cli
 	request := &http.Request{
 		Method:        "POST",
 		URL:           url,
-		Body:          ioutil.NopCloser(buf),
+		Body:          io.NopCloser(buf),
 		ContentLength: int64(buf.Len()),
 	}
 	request = request.WithContext(origRequest.Context())
@@ -257,7 +256,7 @@ func main() {
 	}
 
 	if *caCertFile != "" {
-		caCert, err := ioutil.ReadFile(*caCertFile)
+		caCert, err := os.ReadFile(*caCertFile)
 		if err != nil {
 			level.Error(coordinator.logger).Log("msg", "Not able to read cacert file", "err", err)
 			os.Exit(1)

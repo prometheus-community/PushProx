@@ -20,13 +20,11 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"net/http"
 	"os"
 	"strings"
 
-	kingpin "gopkg.in/alecthomas/kingpin.v2"
-
+	"github.com/alecthomas/kingpin/v2"
 	"github.com/go-kit/log"
 	"github.com/go-kit/log/level"
 	"github.com/prometheus/client_golang/prometheus"
@@ -144,7 +142,7 @@ func (h *httpHandler) handlePush(w http.ResponseWriter, r *http.Request) {
 
 // handlePoll handles clients registering and asking for scrapes.
 func (h *httpHandler) handlePoll(w http.ResponseWriter, r *http.Request) {
-	fqdn, _ := ioutil.ReadAll(r.Body)
+	fqdn, _ := io.ReadAll(r.Body)
 	request, err := h.coordinator.WaitForScrapeInstruction(strings.TrimSpace(string(fqdn)))
 	if err != nil {
 		level.Info(h.logger).Log("msg", "Error WaitForScrapeInstruction:", "err", err)
