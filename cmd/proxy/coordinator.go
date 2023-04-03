@@ -20,8 +20,7 @@ import (
 	"sync"
 	"time"
 
-	kingpin "gopkg.in/alecthomas/kingpin.v2"
-
+	"github.com/alecthomas/kingpin/v2"
 	"github.com/go-kit/log"
 	"github.com/go-kit/log/level"
 	"github.com/google/uuid"

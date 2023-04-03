@@ -5,22 +5,19 @@ orbs:
 executors:
   golang:
     docker:
-      - image: cimg/go:1.18
+      - image: cimg/go:1.20
+      - image: quay.io/prometheus/node-exporter:latest
+
 jobs:
   test:
     executor: golang
     environment:
-      prom_ver: 2.36.0
-      node_ver: 1.3.1
+      prom_ver: 2.43.0
     steps:
       - prometheus/setup_environment
-      - run: make
-      - run: wget https://github.com/prometheus/node_exporter/releases/download/v${node_ver}/node_exporter-${node_ver}.linux-amd64.tar.gz
-      - run: tar xzf node_exporter-${node_ver}.linux-amd64.tar.gz
-      - run: cp -v node_exporter-${node_ver}.linux-amd64/node_exporter ./node_exporter
       - run: wget https://github.com/prometheus/prometheus/releases/download/v${prom_ver}/prometheus-${prom_ver}.linux-amd64.tar.gz
       - run: tar xzf prometheus-${prom_ver}.linux-amd64.tar.gz
-      - run: cp -v prometheus-${prom_ver}.linux-amd64/prometheus ./prometheus
+      - run: sudo cp -v prometheus-${prom_ver}.linux-amd64/prometheus /bin/prometheus
       - run:
           name: Configure Prometheus
           command: |
@@ -33,12 +30,13 @@ jobs:
                 static_configs:
                   - targets: ['$(hostname):9100']
             EOF
+      - run: make
       - run:
           name: Run everything and test that Prometheus can scrape node_exporter via pushprox
           command: ./end-to-end-test.sh
 workflows:
   version: 2
-  stuff:
+  PushProx:
     jobs:
       - test:
           filters:

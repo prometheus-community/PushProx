@@ -13,8 +13,10 @@ cleanup() {
 
 trap cleanup EXIT
 
-./node_exporter &
-echo $! > "${tmpdir}/node_exporter.pid"
+if type node_exporter > /dev/null 2>&1 ; then
+  node_exporter &
+  echo $! > "${tmpdir}/node_exporter.pid"
+fi
 while ! curl -s -f -L http://localhost:9100; do
   echo 'Waiting for node_exporter'
   sleep 2
@@ -34,7 +36,7 @@ while [ "$(curl -s -L 'http://localhost:8080/clients' | jq 'length')" != '1' ] ;
   sleep 2
 done
 
-./prometheus --config.file=prometheus.yml --log.level=debug &
+prometheus --config.file=prometheus.yml --log.level=debug &
 echo $! > "${tmpdir}/prometheus.pid"
 while ! curl -s -f -L http://localhost:9090/-/ready; do
   echo 'Waiting for Prometheus'
