@@ -42,7 +42,7 @@ import (
 )
 
 var (
-	myFqdn      = kingpin.Flag("fqdn", "FQDN to register with").Default(fqdn.Get()).String()
+	myFqdn      = kingpin.Flag("fqdn", "FQDN to register with").Default(default_fqdn()).String()
 	proxyURL    = kingpin.Flag("proxy-url", "Push proxy to talk to.").Required().String()
 	caCertFile  = kingpin.Flag("tls.cacert", "<file> CA certificate to verify peer against").String()
 	tlsCert     = kingpin.Flag("tls.cert", "<cert> Client certificate file").String()
@@ -73,6 +73,14 @@ var (
 		},
 	)
 )
+
+func default_fqdn() string {
+	hostname, err := fqdn.FqdnHostname()
+	if err != nil {
+		return ""
+	}
+	return hostname
+}
 
 func init() {
 	prometheus.MustRegister(pushErrorCounter, pollErrorCounter, scrapeErrorCounter)
@@ -235,6 +243,10 @@ func main() {
 	logger := promlog.New(&promlogConfig)
 	coordinator := Coordinator{logger: logger}
 
+	if *myFqdn == "" {
+		level.Error(coordinator.logger).Log("msg", "automatic FQDN discovery failed.  use --fqdn.")
+		os.Exit(1)
+	}
 	if *proxyURL == "" {
 		level.Error(coordinator.logger).Log("msg", "--proxy-url flag must be specified.")
 		os.Exit(1)
