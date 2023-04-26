@@ -244,7 +244,7 @@ func main() {
 	coordinator := Coordinator{logger: logger}
 
 	if *myFqdn == "" {
-		level.Error(coordinator.logger).Log("msg", "automatic FQDN discovery failed.  use --fqdn.")
+		level.Error(coordinator.logger).Log("msg", "Missing FQDN hostname, use --fqdn.")
 		os.Exit(1)
 	}
 	if *proxyURL == "" {
