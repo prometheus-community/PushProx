@@ -5,7 +5,7 @@ go 1.19
 require (
 	github.com/Showmax/go-fqdn v1.0.0
 	github.com/alecthomas/kingpin/v2 v2.3.2
-	github.com/cenkalti/backoff/v4 v4.2.0
+	github.com/cenkalti/backoff/v4 v4.2.1
 	github.com/go-kit/log v0.2.1
 	github.com/google/uuid v1.3.0
 	github.com/pkg/errors v0.9.1
