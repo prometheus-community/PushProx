@@ -43,6 +43,8 @@ var (
 	listenAddress        = kingpin.Flag("web.listen-address", "Address to listen on for proxy and client requests.").Default(":8080").String()
 	maxScrapeTimeout     = kingpin.Flag("scrape.max-timeout", "Any scrape with a timeout higher than this will have to be clamped to this.").Default("5m").Duration()
 	defaultScrapeTimeout = kingpin.Flag("scrape.default-timeout", "If a scrape lacks a timeout, use this value.").Default("15s").Duration()
+	privateKey           = kingpin.Flag("ca.private-key", "If you want PushProx to hold a certificate, set the private key here.").Default("").String()
+	publicCert           = kingpin.Flag("ca.certificate", "If you want PushProx to hold a certificate, set the certificate here.").Default("").String()
 )
 
 var (
@@ -209,8 +211,16 @@ func main() {
 	handler := newHTTPHandler(logger, coordinator, mux)
 
 	level.Info(logger).Log("msg", "Listening", "address", *listenAddress)
-	if err := http.ListenAndServe(*listenAddress, handler); err != nil {
-		level.Error(logger).Log("msg", "Listening failed", "err", err)
-		os.Exit(1)
+	if len(*privateKey) != 0 && len(*publicCert) != 0 {
+		if err := http.ListenAndServeTLS(*listenAddress, *publicCert, *privateKey, handler); err != nil {
+			level.Error(logger).Log("msg", "Listening failed", "err", err)
+			os.Exit(1)
+		}
+	} else {
+		if err := http.ListenAndServe(*listenAddress, handler); err != nil {
+			level.Error(logger).Log("msg", "Listening failed", "err", err)
+			os.Exit(1)
+		}
 	}
+
 }
