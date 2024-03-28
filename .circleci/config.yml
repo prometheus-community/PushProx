@@ -5,14 +5,14 @@ orbs:
 executors:
   golang:
     docker:
-      - image: cimg/go:1.20
+      - image: cimg/go:1.22
       - image: quay.io/prometheus/node-exporter:latest
 
 jobs:
   test:
     executor: golang
     environment:
-      prom_ver: 2.43.0
+      prom_ver: 2.51.0
     steps:
       - prometheus/setup_environment
       - run: wget https://github.com/prometheus/prometheus/releases/download/v${prom_ver}/prometheus-${prom_ver}.linux-amd64.tar.gz

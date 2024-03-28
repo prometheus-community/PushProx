@@ -1,6 +1,6 @@
 go:
     # This must match .circle/config.yml.
-    version: 1.20
+    version: 1.22
 repository:
     path: github.com/prometheus-community/pushprox
 build:
@@ -9,7 +9,6 @@ build:
           path: ./cmd/client
         - name: pushprox-proxy
           path: ./cmd/proxy
-    flags: -a -tags netgo
 tarball:
     files:
         - LICENSE
