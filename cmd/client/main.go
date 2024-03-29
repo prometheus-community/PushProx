@@ -19,6 +19,7 @@ import (
 	"context"
 	"crypto/tls"
 	"crypto/x509"
+	"errors"
 	"fmt"
 	"io"
 	"net"
@@ -33,7 +34,6 @@ import (
 	"github.com/cenkalti/backoff/v4"
 	"github.com/go-kit/log"
 	"github.com/go-kit/log/level"
-	"github.com/pkg/errors"
 	"github.com/prometheus-community/pushprox/util"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
@@ -134,8 +134,7 @@ func (c *Coordinator) doScrape(request *http.Request, client *http.Client) {
 
 	scrapeResp, err := client.Do(request)
 	if err != nil {
-		msg := fmt.Sprintf("failed to scrape %s", request.URL.String())
-		c.handleErr(request, client, errors.Wrap(err, msg))
+		c.handleErr(request, client, fmt.Errorf("failed to scrape %s: %w", request.URL.String(), err))
 		return
 	}
 	level.Info(logger).Log("msg", "Retrieved scrape response")
@@ -184,25 +183,25 @@ func (c *Coordinator) doPoll(client *http.Client) error {
 	base, err := url.Parse(*proxyURL)
 	if err != nil {
 		level.Error(c.logger).Log("msg", "Error parsing url:", "err", err)
-		return errors.Wrap(err, "error parsing url")
+		return fmt.Errorf("error parsing url: %w", err)
 	}
 	u, err := url.Parse("poll")
 	if err != nil {
 		level.Error(c.logger).Log("msg", "Error parsing url:", "err", err)
-		return errors.Wrap(err, "error parsing url poll")
+		return fmt.Errorf("error parsing url poll: %w", err)
 	}
 	url := base.ResolveReference(u)
 	resp, err := client.Post(url.String(), "", strings.NewReader(*myFqdn))
 	if err != nil {
 		level.Error(c.logger).Log("msg", "Error polling:", "err", err)
-		return errors.Wrap(err, "error polling")
+		return fmt.Errorf("error polling: %w", err)
 	}
 	defer resp.Body.Close()
 
 	request, err := http.ReadRequest(bufio.NewReader(resp.Body))
 	if err != nil {
 		level.Error(c.logger).Log("msg", "Error reading request:", "err", err)
-		return errors.Wrap(err, "error reading request")
+		return fmt.Errorf("error reading request: %w", err)
 	}
 	level.Info(c.logger).Log("msg", "Got scrape request", "scrape_id", request.Header.Get("id"), "url", request.URL)
 
