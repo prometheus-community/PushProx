@@ -14,12 +14,11 @@
 package main
 
 import (
+	"errors"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"testing"
-
-	"github.com/pkg/errors"
 )
 
 type TestLogger struct{}
