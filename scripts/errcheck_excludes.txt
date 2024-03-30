@@ -1,8 +1,0 @@
-// Don't flag lines such as "io.Copy(ioutil.Discard, resp.Body)".
-io.Copy
-// The next two are used in HTTP handlers, any error is handled by the server itself.
-io.WriteString
-(net/http.ResponseWriter).Write
-
-// Never check for logger errors.
-(github.com/go-kit/log.Logger).Log
