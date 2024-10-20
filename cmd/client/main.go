@@ -22,6 +22,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log/slog"
 	"net"
 	"net/http"
 	"net/url"
@@ -32,13 +33,11 @@ import (
 	"github.com/Showmax/go-fqdn"
 	"github.com/alecthomas/kingpin/v2"
 	"github.com/cenkalti/backoff/v4"
-	"github.com/go-kit/log"
-	"github.com/go-kit/log/level"
 	"github.com/prometheus-community/pushprox/util"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
-	"github.com/prometheus/common/promlog"
-	"github.com/prometheus/common/promlog/flag"
+	"github.com/prometheus/common/promslog"
+	"github.com/prometheus/common/promslog/flag"
 )
 
 var (
@@ -89,11 +88,11 @@ func newBackOffFromFlags() backoff.BackOff {
 
 // Coordinator for scrape requests and responses
 type Coordinator struct {
-	logger log.Logger
+	logger *slog.Logger
 }
 
 func (c *Coordinator) handleErr(request *http.Request, client *http.Client, err error) {
-	level.Error(c.logger).Log("err", err)
+	c.logger.Error("coordinator error", "error", err)
 	scrapeErrorCounter.Inc()
 	resp := &http.Response{
 		StatusCode: http.StatusInternalServerError,
@@ -102,14 +101,14 @@ func (c *Coordinator) handleErr(request *http.Request, client *http.Client, err 
 	}
 	if err = c.doPush(resp, request, client); err != nil {
 		pushErrorCounter.Inc()
-		level.Warn(c.logger).Log("msg", "Failed to push failed scrape response:", "err", err)
+		c.logger.Warn("Failed to push failed scrape response:", "err", err)
 		return
 	}
-	level.Info(c.logger).Log("msg", "Pushed failed scrape response")
+	c.logger.Info("Pushed failed scrape response")
 }
 
 func (c *Coordinator) doScrape(request *http.Request, client *http.Client) {
-	logger := log.With(c.logger, "scrape_id", request.Header.Get("id"))
+	logger := c.logger.With("scrape_id", request.Header.Get("id"))
 	timeout, err := util.GetHeaderTimeout(request.Header)
 	if err != nil {
 		c.handleErr(request, client, err)
@@ -137,13 +136,13 @@ func (c *Coordinator) doScrape(request *http.Request, client *http.Client) {
 		c.handleErr(request, client, fmt.Errorf("failed to scrape %s: %w", request.URL.String(), err))
 		return
 	}
-	level.Info(logger).Log("msg", "Retrieved scrape response")
+	logger.Info("Retrieved scrape response")
 	if err = c.doPush(scrapeResp, request, client); err != nil {
 		pushErrorCounter.Inc()
-		level.Warn(logger).Log("msg", "Failed to push scrape response:", "err", err)
+		logger.Warn("Failed to push scrape response:", "err", err)
 		return
 	}
-	level.Info(logger).Log("msg", "Pushed scrape result")
+	logger.Info("Pushed scrape result")
 }
 
 // Report the result of the scrape back up to the proxy.
@@ -182,28 +181,28 @@ func (c *Coordinator) doPush(resp *http.Response, origRequest *http.Request, cli
 func (c *Coordinator) doPoll(client *http.Client) error {
 	base, err := url.Parse(*proxyURL)
 	if err != nil {
-		level.Error(c.logger).Log("msg", "Error parsing url:", "err", err)
+		c.logger.Error("Error parsing url:", "err", err)
 		return fmt.Errorf("error parsing url: %w", err)
 	}
 	u, err := url.Parse("poll")
 	if err != nil {
-		level.Error(c.logger).Log("msg", "Error parsing url:", "err", err)
+		c.logger.Error("Error parsing url:", "err", err)
 		return fmt.Errorf("error parsing url poll: %w", err)
 	}
 	url := base.ResolveReference(u)
 	resp, err := client.Post(url.String(), "", strings.NewReader(*myFqdn))
 	if err != nil {
-		level.Error(c.logger).Log("msg", "Error polling:", "err", err)
+		c.logger.Error("Error polling:", "err", err)
 		return fmt.Errorf("error polling: %w", err)
 	}
 	defer resp.Body.Close()
 
 	request, err := http.ReadRequest(bufio.NewReader(resp.Body))
 	if err != nil {
-		level.Error(c.logger).Log("msg", "Error reading request:", "err", err)
+		c.logger.Error("Error reading request:", "err", err)
 		return fmt.Errorf("error reading request: %w", err)
 	}
-	level.Info(c.logger).Log("msg", "Got scrape request", "scrape_id", request.Header.Get("id"), "url", request.URL)
+	c.logger.Info("Got scrape request", "scrape_id", request.Header.Get("id"), "url", request.URL)
 
 	request.RequestURI = ""
 
@@ -221,32 +220,32 @@ func (c *Coordinator) loop(bo backoff.BackOff, client *http.Client) {
 		if err := backoff.RetryNotify(op, bo, func(err error, _ time.Duration) {
 			pollErrorCounter.Inc()
 		}); err != nil {
-			level.Error(c.logger).Log("err", err)
+			c.logger.Error("backoff returned error", "error", err)
 		}
 	}
 }
 
 func main() {
-	promlogConfig := promlog.Config{}
-	flag.AddFlags(kingpin.CommandLine, &promlogConfig)
+	promslogConfig := promslog.Config{}
+	flag.AddFlags(kingpin.CommandLine, &promslogConfig)
 	kingpin.HelpFlag.Short('h')
 	kingpin.Parse()
-	logger := promlog.New(&promlogConfig)
+	logger := promslog.New(&promslogConfig)
 	coordinator := Coordinator{logger: logger}
 
 	if *proxyURL == "" {
-		level.Error(coordinator.logger).Log("msg", "--proxy-url flag must be specified.")
+		coordinator.logger.Error("--proxy-url flag must be specified.")
 		os.Exit(1)
 	}
 	// Make sure proxyURL ends with a single '/'
 	*proxyURL = strings.TrimRight(*proxyURL, "/") + "/"
-	level.Info(coordinator.logger).Log("msg", "URL and FQDN info", "proxy_url", *proxyURL, "fqdn", *myFqdn)
+	coordinator.logger.Info("URL and FQDN info", "proxy_url", *proxyURL, "fqdn", *myFqdn)
 
 	tlsConfig := &tls.Config{}
 	if *tlsCert != "" {
 		cert, err := tls.LoadX509KeyPair(*tlsCert, *tlsKey)
 		if err != nil {
-			level.Error(coordinator.logger).Log("msg", "Certificate or Key is invalid", "err", err)
+			coordinator.logger.Error("Certificate or Key is invalid", "err", err)
 			os.Exit(1)
 		}
 
@@ -257,12 +256,12 @@ func main() {
 	if *caCertFile != "" {
 		caCert, err := os.ReadFile(*caCertFile)
 		if err != nil {
-			level.Error(coordinator.logger).Log("msg", "Not able to read cacert file", "err", err)
+			coordinator.logger.Error("Not able to read cacert file", "err", err)
 			os.Exit(1)
 		}
 		caCertPool := x509.NewCertPool()
 		if ok := caCertPool.AppendCertsFromPEM(caCert); !ok {
-			level.Error(coordinator.logger).Log("msg", "Failed to use cacert file as ca certificate")
+			coordinator.logger.Error("Failed to use cacert file as ca certificate")
 			os.Exit(1)
 		}
 
@@ -272,7 +271,7 @@ func main() {
 	if *metricsAddr != "" {
 		go func() {
 			if err := http.ListenAndServe(*metricsAddr, promhttp.Handler()); err != nil {
-				level.Warn(coordinator.logger).Log("msg", "ListenAndServe", "err", err)
+				coordinator.logger.Warn("ListenAndServe", "err", err)
 			}
 		}()
 	}

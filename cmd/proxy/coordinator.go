@@ -16,13 +16,12 @@ package main
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"net/http"
 	"sync"
 	"time"
 
 	"github.com/alecthomas/kingpin/v2"
-	"github.com/go-kit/log"
-	"github.com/go-kit/log/level"
 	"github.com/google/uuid"
 	"github.com/prometheus-community/pushprox/util"
 	"github.com/prometheus/client_golang/prometheus"
@@ -55,11 +54,11 @@ type Coordinator struct {
 	// Clients we know about and when they last contacted us.
 	known map[string]time.Time
 
-	logger log.Logger
+	logger *slog.Logger
 }
 
 // NewCoordinator initiates the coordinator and starts the client cleanup routine
-func NewCoordinator(logger log.Logger) (*Coordinator, error) {
+func NewCoordinator(logger *slog.Logger) (*Coordinator, error) {
 	c := &Coordinator{
 		waiting:   map[string]chan *http.Request{},
 		responses: map[string]chan *http.Response{},
@@ -112,7 +111,7 @@ func (c *Coordinator) DoScrape(ctx context.Context, r *http.Request) (*http.Resp
 	if err != nil {
 		return nil, err
 	}
-	level.Info(c.logger).Log("msg", "DoScrape", "scrape_id", id, "url", r.URL.String())
+	c.logger.Info("DoScrape", "scrape_id", id, "url", r.URL.String())
 	r.Header.Add("Id", id)
 	select {
 	case <-ctx.Done():
@@ -133,7 +132,7 @@ func (c *Coordinator) DoScrape(ctx context.Context, r *http.Request) (*http.Resp
 
 // WaitForScrapeInstruction registers a client waiting for a scrape result
 func (c *Coordinator) WaitForScrapeInstruction(fqdn string) (*http.Request, error) {
-	level.Info(c.logger).Log("msg", "WaitForScrapeInstruction", "fqdn", fqdn)
+	c.logger.Info("WaitForScrapeInstruction", "fqdn", fqdn)
 
 	c.addKnownClient(fqdn)
 	// TODO: What if the client times out?
@@ -165,7 +164,7 @@ func (c *Coordinator) WaitForScrapeInstruction(fqdn string) (*http.Request, erro
 // ScrapeResult send by client
 func (c *Coordinator) ScrapeResult(r *http.Response) error {
 	id := r.Header.Get("Id")
-	level.Info(c.logger).Log("msg", "ScrapeResult", "scrape_id", id)
+	c.logger.Info("ScrapeResult", "scrape_id", id)
 	ctx, cancel := context.WithTimeout(context.Background(), util.GetScrapeTimeout(maxScrapeTimeout, defaultScrapeTimeout, r.Header))
 	defer cancel()
 	// Don't expose internal headers.
@@ -217,7 +216,7 @@ func (c *Coordinator) gc() {
 					deleted++
 				}
 			}
-			level.Info(c.logger).Log("msg", "GC of clients completed", "deleted", deleted, "remaining", len(c.known))
+			c.logger.Info("GC of clients completed", "deleted", deleted, "remaining", len(c.known))
 			knownClients.Set(float64(len(c.known)))
 		}()
 	}
