@@ -19,21 +19,16 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+
+	"github.com/prometheus/common/promslog"
 )
-
-type TestLogger struct{}
-
-func (tl *TestLogger) Log(vars ...interface{}) error {
-	fmt.Printf("%+v\n", vars)
-	return nil
-}
 
 func prepareTest() (*httptest.Server, Coordinator) {
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 		fmt.Fprintln(w, "GET /index.html HTTP/1.0\n\nOK")
 	}))
-	c := Coordinator{logger: &TestLogger{}}
+	c := Coordinator{logger: promslog.NewNopLogger()}
 	*proxyURL = ts.URL
 	return ts, c
 }
