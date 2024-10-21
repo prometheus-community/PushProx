@@ -92,7 +92,7 @@ type Coordinator struct {
 }
 
 func (c *Coordinator) handleErr(request *http.Request, client *http.Client, err error) {
-	c.logger.Error("coordinator error", "error", err)
+	c.logger.Error("Coordinator error", "error", err)
 	scrapeErrorCounter.Inc()
 	resp := &http.Response{
 		StatusCode: http.StatusInternalServerError,
