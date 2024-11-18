@@ -11,9 +11,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package main
+package client
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"net/http"
@@ -23,13 +24,13 @@ import (
 	"github.com/prometheus/common/promslog"
 )
 
-func prepareTest() (*httptest.Server, Coordinator) {
+func prepareTest() (*httptest.Server, *Coordinator) {
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 		fmt.Fprintln(w, "GET /index.html HTTP/1.0\n\nOK")
 	}))
-	c := Coordinator{logger: promslog.NewNopLogger()}
-	*proxyURL = ts.URL
+	c, _ := NewCoordinator(promslog.NewNopLogger(), nil, ts.Client(), ts.URL, ts.URL)
+
 	return ts, c
 }
 
@@ -42,8 +43,7 @@ func TestDoScrape(t *testing.T) {
 		t.Fatal(err)
 	}
 	req.Header.Add("X-Prometheus-Scrape-Timeout-Seconds", "10.0")
-	*myFqdn = ts.URL
-	c.doScrape(req, ts.Client())
+	c.doScrape(req)
 }
 
 func TestHandleErr(t *testing.T) {
@@ -54,13 +54,13 @@ func TestHandleErr(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	c.handleErr(req, ts.Client(), errors.New("test error"))
+	c.handleErr(req, errors.New("test error"))
 }
 
 func TestLoop(t *testing.T) {
 	ts, c := prepareTest()
 	defer ts.Close()
-	if err := c.doPoll(ts.Client()); err != nil {
+	if err := c.doPoll(context.Background()); err != nil {
 		t.Fatal(err)
 	}
 }
