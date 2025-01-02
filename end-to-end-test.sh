@@ -29,7 +29,7 @@ while ! curl -s -f -L http://localhost:8080/clients; do
   sleep 2
 done
 
-./pushprox-client  --log.level=debug --proxy-url=http://localhost:8080 &
+./pushprox-client  --log.level=debug --proxy-url=http://localhost:8080 --fqdn $(hostname) &
 echo $! > "${tmpdir}/client.pid"
 while [ "$(curl -s -L 'http://localhost:8080/clients' | jq 'length')" != '1' ] ; do
   echo 'Waiting for client'
