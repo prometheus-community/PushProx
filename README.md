@@ -44,6 +44,25 @@ If the target must be scraped over SSL/TLS, add:
 rather than the usual `scheme: https`. Only the default `scheme: http` works with the proxy,
 so this workaround is required.
 
+## Proxy CLI Options
+
+| Option | Default | Description |
+|--------|---------|-------------|
+| --web.listen-address | 8080 | Address to listen on for proxy and client requests.|
+| --scrape.max-timeout | 5m | Any scrape with a timeout higher than this will have to be clamped to this|
+| --scrape.default-timeout | 15s | If a scrape lacks a timeout, use this value|
+
+## Client CLI Options
+
+| Option | Default | Description|
+|--------|---------|------------|
+| --proxy-url |  |  Push proxy to talk to|
+| --fqdn | FQDN your host | FQDN to register with|
+| --tls.cacert |  | \<file> CA certificate to verify peer against |
+| --tls.cert |  | \<cert> Client certificate file |
+| --tls.key |  | \<key> Private key file|
+| --metrics-addr |  | Serve Prometheus metrics at this address|
+
 ## Service Discovery
 
 The `/clients` endpoint will return a list of all registered clients in the format
