@@ -141,8 +141,32 @@ func (h *httpHandler) handlePush(w http.ResponseWriter, r *http.Request) {
 
 // handlePoll handles clients registering and asking for scrapes.
 func (h *httpHandler) handlePoll(w http.ResponseWriter, r *http.Request) {
-	fqdn, _ := io.ReadAll(r.Body)
-	request, err := h.coordinator.WaitForScrapeInstruction(strings.TrimSpace(string(fqdn)))
+	var fqdn string
+	var labels map[string]string
+
+	contentType := r.Header.Get("Content-Type")
+	if contentType == "application/json" {
+		var pollReq util.PollRequest
+		body, err := io.ReadAll(r.Body)
+		if err != nil {
+			h.logger.Error("Error reading request body:", "err", err)
+			http.Error(w, fmt.Sprintf("Error reading request body: %s", err.Error()), http.StatusBadRequest)
+			return
+		}
+		if err := json.Unmarshal(body, &pollReq); err != nil {
+			h.logger.Error("Error unmarshaling JSON:", "err", err)
+			http.Error(w, fmt.Sprintf("Error unmarshaling JSON: %s", err.Error()), http.StatusBadRequest)
+			return
+		}
+		fqdn = pollReq.FQDN
+		labels = pollReq.Labels
+	} else {
+		body, _ := io.ReadAll(r.Body)
+		fqdn = strings.TrimSpace(string(body))
+		labels = make(map[string]string)
+	}
+
+	request, err := h.coordinator.WaitForScrapeInstruction(fqdn, labels)
 	if err != nil {
 		h.logger.Info("Error WaitForScrapeInstruction:", "err", err)
 		http.Error(w, fmt.Sprintf("Error WaitForScrapeInstruction: %s", err.Error()), http.StatusRequestTimeout)
@@ -150,15 +174,18 @@ func (h *httpHandler) handlePoll(w http.ResponseWriter, r *http.Request) {
 	}
 	//nolint:errcheck // https://github.com/prometheus-community/PushProx/issues/111
 	request.WriteProxy(w) // Send full request as the body of the response.
-	h.logger.Info("Responded to /poll", "url", request.URL.String(), "scrape_id", request.Header.Get("Id"))
+	h.logger.Info("Responded to /poll", "url", request.URL.String(), "scrape_id", request.Header.Get("Id"), "labels", labels)
 }
 
 // handleListClients handles requests to list available clients as a JSON array.
 func (h *httpHandler) handleListClients(w http.ResponseWriter, r *http.Request) {
 	known := h.coordinator.KnownClients()
 	targets := make([]*targetGroup, 0, len(known))
-	for _, k := range known {
-		targets = append(targets, &targetGroup{Targets: []string{k}})
+	for fqdn, info := range known {
+		targets = append(targets, &targetGroup{
+			Targets: []string{fqdn},
+			Labels:  info.Labels,
+		})
 	}
 	w.Header().Set("Content-Type", "application/json")
 	//nolint:errcheck // https://github.com/prometheus-community/PushProx/issues/111
