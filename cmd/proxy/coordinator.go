@@ -32,6 +32,11 @@ var (
 	registrationTimeout = kingpin.Flag("registration.timeout", "After how long a registration expires.").Default("5m").Duration()
 )
 
+type ClientInfo struct {
+	LastSeen time.Time
+	Labels   map[string]string
+}
+
 // Coordinator metrics.
 var (
 	knownClients = promauto.NewGauge(
@@ -51,8 +56,8 @@ type Coordinator struct {
 	waiting map[string]chan *http.Request
 	// Responses from clients.
 	responses map[string]chan *http.Response
-	// Clients we know about and when they last contacted us.
-	known map[string]time.Time
+	// Clients we know about with their labels and last contact time.
+	known map[string]ClientInfo
 
 	logger *slog.Logger
 }
@@ -62,7 +67,7 @@ func NewCoordinator(logger *slog.Logger) (*Coordinator, error) {
 	c := &Coordinator{
 		waiting:   map[string]chan *http.Request{},
 		responses: map[string]chan *http.Response{},
-		known:     map[string]time.Time{},
+		known:     map[string]ClientInfo{},
 		logger:    logger,
 	}
 
@@ -131,10 +136,10 @@ func (c *Coordinator) DoScrape(ctx context.Context, r *http.Request) (*http.Resp
 }
 
 // WaitForScrapeInstruction registers a client waiting for a scrape result
-func (c *Coordinator) WaitForScrapeInstruction(fqdn string) (*http.Request, error) {
-	c.logger.Info("WaitForScrapeInstruction", "fqdn", fqdn)
+func (c *Coordinator) WaitForScrapeInstruction(fqdn string, labels map[string]string) (*http.Request, error) {
+	c.logger.Info("WaitForScrapeInstruction", "fqdn", fqdn, "labels", labels)
 
-	c.addKnownClient(fqdn)
+	c.addKnownClient(fqdn, labels)
 	// TODO: What if the client times out?
 	ch := c.getRequestChannel(fqdn)
 
@@ -179,24 +184,31 @@ func (c *Coordinator) ScrapeResult(r *http.Response) error {
 	}
 }
 
-func (c *Coordinator) addKnownClient(fqdn string) {
+func (c *Coordinator) addKnownClient(fqdn string, labels map[string]string) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
-	c.known[fqdn] = time.Now()
+	if labels == nil {
+		labels = make(map[string]string)
+	}
+
+	c.known[fqdn] = ClientInfo{
+		LastSeen: time.Now(),
+		Labels:   labels,
+	}
 	knownClients.Set(float64(len(c.known)))
 }
 
-// KnownClients returns a list of alive clients
-func (c *Coordinator) KnownClients() []string {
+// KnownClients returns a map of alive clients with their info
+func (c *Coordinator) KnownClients() map[string]ClientInfo {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
 	limit := time.Now().Add(-*registrationTimeout)
-	known := make([]string, 0, len(c.known))
-	for k, t := range c.known {
-		if limit.Before(t) {
-			known = append(known, k)
+	known := make(map[string]ClientInfo)
+	for fqdn, info := range c.known {
+		if limit.Before(info.LastSeen) {
+			known[fqdn] = info
 		}
 	}
 	return known
@@ -210,9 +222,9 @@ func (c *Coordinator) gc() {
 			defer c.mu.Unlock()
 			limit := time.Now().Add(-*registrationTimeout)
 			deleted := 0
-			for k, ts := range c.known {
-				if ts.Before(limit) {
-					delete(c.known, k)
+			for fqdn, info := range c.known {
+				if info.LastSeen.Before(limit) {
+					delete(c.known, fqdn)
 					deleted++
 				}
 			}
