@@ -19,6 +19,11 @@ import (
 	"time"
 )
 
+type PollRequest struct {
+	FQDN   string            `json:"fqdn"`
+	Labels map[string]string `json:"labels"`
+}
+
 func GetScrapeTimeout(maxScrapeTimeout, defaultScrapeTimeout *time.Duration, h http.Header) time.Duration {
 	timeout := *defaultScrapeTimeout
 	headerTimeout, err := GetHeaderTimeout(h)
