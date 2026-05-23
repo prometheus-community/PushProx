@@ -48,7 +48,21 @@ so this workaround is required.
 
 The `/clients` endpoint will return a list of all registered clients in the format
 used by `file_sd_configs`. You could use wget in a cronjob to put it somewhere
-file\_sd\_configs can read and then then relabel as needed.
+file\_sd\_configs can read and then then relabel as needed. For example:
+
+```
+scrape_configs:
+- job_name: node
+  proxy_url: http://proxy:8080/
+  file_sd_configs:
+    - files:
+      - pushprox.json
+  relabel_configs:
+    - source_labels: ['__address__']
+      regex: '(.*)'
+      replacement: '$1:9100'
+      target_label: '__address__'
+```
 
 ## How It Works
 
