@@ -87,6 +87,13 @@ func (c *Coordinator) getRequestChannel(fqdn string) chan *http.Request {
 	return ch
 }
 
+func (c *Coordinator) checkRequestChannel(fqdn string) bool {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	_, ok := c.waiting[fqdn]
+	return ok
+}
+
 func (c *Coordinator) getResponseChannel(id string) chan *http.Response {
 	c.mu.Lock()
 	defer c.mu.Unlock()
@@ -188,15 +195,23 @@ func (c *Coordinator) addKnownClient(fqdn string) {
 }
 
 // KnownClients returns a list of alive clients
-func (c *Coordinator) KnownClients() []string {
+func (c *Coordinator) KnownClients(client string) []string {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
+	var known []string
 	limit := time.Now().Add(-*registrationTimeout)
-	known := make([]string, 0, len(c.known))
-	for k, t := range c.known {
-		if limit.Before(t) {
-			known = append(known, k)
+	if client != "" {
+		known = make([]string, 0, 1)
+		if t, ok := c.known[client]; ok && limit.Before(t) {
+			known = append(known, client)
+		}
+	} else {
+		known = make([]string, 0, len(c.known))
+		for k, t := range c.known {
+			if limit.Before(t) {
+				known = append(known, k)
+			}
 		}
 	}
 	return known
