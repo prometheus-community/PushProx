@@ -64,7 +64,7 @@ The Proxy does not respond yet.
 Next, Prometheus tries to scrape the target with hostname `fqdn-x` via the Proxy (2).
 Using the fqdn received in (1), the Proxy now routes the scrape to the correct Client: the scrape request is in the response body of the poll (3).
 This scrape request is executed by the client (4), the response containing metrics (5) is posted to the Proxy (6). 
-On its turn, the Proxy returns this to Prometheus (7) as a reponse to the initial scrape of (2).
+On its turn, the Proxy returns this to Prometheus (7) as a response to the initial scrape of (2).
 
 PushProx passes all HTTP headers transparently, features like compression and accept encoding are up to the scraping Prometheus server.
 
