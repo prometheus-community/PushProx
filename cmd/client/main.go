@@ -197,6 +197,11 @@ func (c *Coordinator) doPoll(client *http.Client) error {
 	}
 	defer resp.Body.Close()
 
+	if resp.StatusCode != http.StatusOK {
+		level.Warn(c.logger).Log("msg", "Unexpected response", "statusCode", resp.StatusCode)
+		return fmt.Errorf("unexpected response status=%d", resp.StatusCode)
+	}
+
 	request, err := http.ReadRequest(bufio.NewReader(resp.Body))
 	if err != nil {
 		c.logger.Error("Error reading request:", "err", err)
