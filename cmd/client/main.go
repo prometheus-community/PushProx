@@ -19,6 +19,7 @@ import (
 	"context"
 	"crypto/tls"
 	"crypto/x509"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -47,6 +48,7 @@ var (
 	tlsCert     = kingpin.Flag("tls.cert", "<cert> Client certificate file").String()
 	tlsKey      = kingpin.Flag("tls.key", "<key> Private key file").String()
 	metricsAddr = kingpin.Flag("metrics-addr", "Serve Prometheus metrics at this address").Default(":9369").String()
+	labels      = kingpin.Flag("label", "Labels to register with client FQDN for service discovery in key=value format. Can be specified multiple times.").StringMap()
 
 	retryInitialWait = kingpin.Flag("proxy.retry.initial-wait", "Amount of time to wait after proxy failure").Default("1s").Duration()
 	retryMaxWait     = kingpin.Flag("proxy.retry.max-wait", "Maximum amount of time to wait between proxy poll retries").Default("5s").Duration()
@@ -190,7 +192,19 @@ func (c *Coordinator) doPoll(client *http.Client) error {
 		return fmt.Errorf("error parsing url poll: %w", err)
 	}
 	url := base.ResolveReference(u)
-	resp, err := client.Post(url.String(), "", strings.NewReader(*myFqdn))
+
+	pollReq := util.PollRequest{
+		FQDN:   *myFqdn,
+		Labels: *labels,
+	}
+
+	body, err := json.Marshal(pollReq)
+	if err != nil {
+		c.logger.Error("Error marshaling poll request:", "err", err)
+		return fmt.Errorf("error marshaling poll request: %w", err)
+	}
+
+	resp, err := client.Post(url.String(), "application/json", bytes.NewReader(body))
 	if err != nil {
 		c.logger.Error("Error polling:", "err", err)
 		return fmt.Errorf("error polling: %w", err)
