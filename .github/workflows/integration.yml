@@ -1,0 +1,33 @@
+---
+name: Integration
+on:
+  pull_request:
+  push:
+    branches: [main, master, 'release-*']
+    tags: ['v*']
+
+permissions:
+  contents: read
+
+jobs:
+  integration:
+    name: Integration test
+    runs-on: ubuntu-latest
+    services:
+      node-exporter:
+        image: quay.io/prometheus/node-exporter:latest
+        ports:
+          - 9100:9100
+    env:
+      PROM_VERSION: 3.12.0
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6.5.0
+        with:
+          go-version: 1.26.x
+      - run: make build
+      - run: curl -sSf -L https://github.com/prometheus/prometheus/releases/download/v${PROM_VERSION}/prometheus-${PROM_VERSION}.linux-amd64.tar.gz | tar xz
+      - run: sudo cp -v prometheus-${PROM_VERSION}.linux-amd64/prometheus /usr/bin/prometheus
+      - run: sed -i "s/node-exporter/${HOSTNAME}/" ./end-to-end/prometheus.yml
+      - run: cat ./end-to-end/prometheus.yml
+      - run: ./end-to-end/test.sh
