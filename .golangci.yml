@@ -9,11 +9,6 @@ linters:
       exclude-functions:
         - io.Copy
         - (net/http.ResponseWriter).Write
-    revive:
-      rules:
-        - name: unused-parameter
-          severity: warning
-          disabled: true
   exclusions:
     generated: lax
     presets:
