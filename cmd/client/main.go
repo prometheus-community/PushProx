@@ -217,7 +217,7 @@ func (c *Coordinator) loop(bo backoff.BackOff, client *http.Client) {
 	}
 
 	for {
-		if err := backoff.RetryNotify(op, bo, func(err error, _ time.Duration) {
+		if err := backoff.RetryNotify(op, bo, func(_ error, _ time.Duration) {
 			pollErrorCounter.Inc()
 		}); err != nil {
 			c.logger.Error("backoff returned error", "error", err)
@@ -286,7 +286,6 @@ func main() {
 				Interval: 5 * time.Second,
 				Count:    3,
 			},
-			DualStack: true,
 		}).DialContext,
 		MaxIdleConns:          100,
 		IdleConnTimeout:       90 * time.Second,

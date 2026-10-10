@@ -130,11 +130,11 @@ func (h *httpHandler) handlePush(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, fmt.Sprintf("Error pushing: %s", err.Error()), 500)
 		return
 	}
-	scrapeId := scrapeResult.Header.Get("Id")
-	h.logger.Info("Got /push", "scrape_id", scrapeId)
+	scrapeID := scrapeResult.Header.Get("Id")
+	h.logger.Info("Got /push", "scrape_id", scrapeID)
 	err = h.coordinator.ScrapeResult(scrapeResult)
 	if err != nil {
-		h.logger.Error("Error pushing:", "err", err, "scrape_id", scrapeId)
+		h.logger.Error("Error pushing:", "err", err, "scrape_id", scrapeID)
 		http.Error(w, fmt.Sprintf("Error pushing: %s", err.Error()), 500)
 	}
 }
@@ -154,7 +154,7 @@ func (h *httpHandler) handlePoll(w http.ResponseWriter, r *http.Request) {
 }
 
 // handleListClients handles requests to list available clients as a JSON array.
-func (h *httpHandler) handleListClients(w http.ResponseWriter, r *http.Request) {
+func (h *httpHandler) handleListClients(w http.ResponseWriter, _ *http.Request) {
 	known := h.coordinator.KnownClients()
 	targets := make([]*targetGroup, 0, len(known))
 	for _, k := range known {
